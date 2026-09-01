@@ -289,13 +289,15 @@ export class RadarStore {
 
   pruneLowHeat(days = 30): { pruned: number } {
     const cutoff = new Date(Date.now() - days * 86_400_000).toISOString()
-    const rows = this.db.prepare(`SELECT * FROM products WHERE reuse_bucket='NON_REUSABLE' AND status='STAGING' AND peak_heat_score<60 AND last_seen_at<?`).all(cutoff) as unknown as ProductRecord[]
+    const rows = this.db.prepare(`SELECT * FROM products WHERE reuse_bucket='NON_REUSABLE' AND status='STAGING'
+      AND (peak_heat_score<60 OR research_reason LIKE '范围待确认：%') AND last_seen_at<?`).all(cutoff) as unknown as ProductRecord[]
     this.db.exec('BEGIN IMMEDIATE')
     try {
       for (const row of rows) {
+        const reason = row.research_reason.startsWith('范围待确认：') ? '非实体商品或商品范围无法确认，30天后清理' : '普通热度不可复用商品，30天未升温'
         this.db.prepare(`INSERT INTO tombstones(natural_key_hash,reason,first_seen_at,last_seen_at,deleted_at,last_heat_score)
           VALUES(?,?,?,?,?,?) ON CONFLICT(natural_key_hash) DO UPDATE SET reason=excluded.reason,last_seen_at=excluded.last_seen_at,
-          deleted_at=excluded.deleted_at,last_heat_score=excluded.last_heat_score`).run(sha256(row.natural_key), '普通热度不可复用商品，30天未升温',
+          deleted_at=excluded.deleted_at,last_heat_score=excluded.last_heat_score`).run(sha256(row.natural_key), reason,
           row.first_evidence_at, row.last_seen_at, nowIso(), row.peak_heat_score)
         this.db.prepare('DELETE FROM raw_events WHERE product_id=?').run(row.id)
         this.db.prepare('DELETE FROM products WHERE id=?').run(row.id)

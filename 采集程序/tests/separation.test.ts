@@ -73,6 +73,20 @@ test('很火但不可复用的商品进入研究库，普通热度不可复用�
   store.close()
 })
 
+test('票务、人物、赛事和纯服务即使热度很高也不进入正式商品库', () => {
+  const store = new RadarStore({ memory: true })
+  const countries = ['US', 'GB', 'AU', 'CA', 'NZ']
+  store.ingestEvents(countries.map((country, index) => event(index + 70, { name: 'Ticketmaster', country, searchVolume: 1_000_000 })))
+  const product = store.listProducts(undefined, true)[0]; const result = analyze(store, product.id)
+  assert.ok(result.analysis.researchHeatScore >= 60)
+  assert.equal(result.analysis.status, 'STAGING')
+  assert.match(result.analysis.researchReason, /^范围待确认：/)
+  store.updateAnalysis(result.product, result.analysis, buildDossier(result.product, result.analysis, result.events, result.media))
+  const exported = store.exportSnapshot('NON_REUSABLE') as { products: Array<{ original_name: string }> }
+  assert.deepEqual(exported.products, [])
+  store.close()
+})
+
 test('普通热度不可复用商品30天后删除详情并留下匿名墓碑', () => {
   const store = new RadarStore({ memory: true })
   const old = new Date(Date.now() - 40 * 86_400_000).toISOString()

@@ -20,7 +20,10 @@ export async function analyzeAll(store: RadarStore): Promise<{ analyzed: number,
     const dossier = buildDossier(product, analysis, events, media)
     store.updateAnalysis(product, analysis, dossier)
     const refreshed = store.getProduct(product.id)!
-    if (refreshed.status === 'ACTIVE') { await writeDossierFile(refreshed, dossier); active += 1 } else staging += 1
+    // 该函数也负责把降级到待复核区的旧档案移出正式两库，避免残留文件造成误解。
+    await writeDossierFile(refreshed, dossier)
+    if (refreshed.status === 'ACTIVE') active += 1
+    else staging += 1
     analyzed += 1
   }
   store.audit('ANALYSIS_COMPLETE', `已分析${analyzed}个商品；正式库${active}个，待复核${staging}个`, { analyzed, active, staging })

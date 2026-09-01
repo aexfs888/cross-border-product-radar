@@ -212,11 +212,26 @@ export function dossierMarkdown(product: ProductRecord, dossier: Record<string, 
 }
 
 export async function writeDossierFile(product: ProductRecord, dossier: Record<string, unknown>): Promise<string | null> {
-  if (product.status !== 'ACTIVE') return null
+  await fs.mkdir(paths.history, { recursive: true })
+  if (product.status !== 'ACTIVE') {
+    const outOfScope = product.research_reason.startsWith('范围待确认：')
+    for (const directory of [paths.reusable, paths.nonReusable]) {
+      const files = (await fs.readdir(directory).catch(() => [])).filter((name) => name.startsWith(`${product.id}-`) && name.endsWith('.md'))
+      for (const old of files) {
+        if (outOfScope) await fs.rm(path.join(directory, old), { force: true })
+        else await fs.rename(path.join(directory, old), path.join(paths.history, `${new Date().toISOString().replace(/[:.]/g, '-')}-${old}`))
+      }
+    }
+    if (outOfScope) {
+      const archived = (await fs.readdir(paths.history).catch(() => [])).filter((name) => name.includes(`-${product.id}-`) && name.endsWith('.md'))
+      for (const old of archived) await fs.rm(path.join(paths.history, old), { force: true })
+    }
+    return null
+  }
   const directory = product.reuse_bucket === 'REUSABLE' ? paths.reusable : paths.nonReusable
   const otherDirectory = product.reuse_bucket === 'REUSABLE' ? paths.nonReusable : paths.reusable
   const filename = `${product.id}-${slug(product.zh_name || product.original_name)}.md`
-  await fs.mkdir(directory, { recursive: true }); await fs.mkdir(paths.history, { recursive: true })
+  await fs.mkdir(directory, { recursive: true })
   const otherFiles = (await fs.readdir(otherDirectory).catch(() => [])).filter((name) => name.startsWith(`${product.id}-`) && name.endsWith('.md'))
   for (const old of otherFiles) await fs.rename(path.join(otherDirectory, old), path.join(paths.history, `${new Date().toISOString().replace(/[:.]/g, '-')}-${old}`))
   const filePath = path.join(directory, filename)

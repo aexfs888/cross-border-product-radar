@@ -28,8 +28,9 @@ async function googleTrends(runId: string, source: SourceConfig, countries: Coun
     for (const item of items) {
       const title = String(item?.title || '').trim()
       const related = asArray(item?.news_item).map((entry: any) => String(entry?.news_item_title || '')).filter(Boolean)
-      const searchable = `${title} ${related.join(' ')}`
-      if (!title || !isProductLike(searchable, rules.productTerms)) continue
+      // 相关新闻可能偶然提到 phone、car 等商品词，不能据此把人物、赛事、票务或纯服务
+      // 误建成商品。趋势标题本身必须具备商品属性；品牌型号可由后续商业证据补充。
+      if (!title || !isProductLike(title, rules.productTerms)) continue
       const sourceUrl = String(item?.link || `https://trends.google.com/trending?geo=${country.googleTrendsGeo}`)
       const base = eventBase(runId, source, sourceUrl, country.code, 'TREND', { title, related, traffic: item?.approx_traffic, country: country.code })
       results.push({

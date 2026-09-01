@@ -1,5 +1,5 @@
 import { loadCountries, loadKeywordRules } from './config.js'
-import { ageBand, clamp, normalizeText, safeJson } from './utils.js'
+import { ageBand, clamp, isProductLike, normalizeText, safeJson } from './utils.js'
 import type { CollectorEvent, ProductAnalysis, ProductRecord, RightsStatus } from './types.js'
 
 function median(values: number[]): number {
@@ -65,6 +65,7 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const authorizedMedia = media.filter((item) => item.rights_status === 'AUTHORIZED')
   const rightsStatus: RightsStatus = authorizedMedia.length ? 'AUTHORIZED' : media.some((item) => item.rights_status === 'PROHIBITED') ? 'PROHIBITED' : media.length ? 'LINK_ONLY' : 'UNKNOWN'
   const identityConfirmed = Boolean(product.gtin || product.mpn || (product.brand && product.model))
+  const scopeConfirmed = isProductLike(product.original_name, rules.productTerms) || identityConfirmed || events.some((event) => event.sourceFamily === 'COMMERCE' || event.eventType === 'SAFETY')
   const targetEu = [...countries].some((code) => ['IE', 'SE', 'DK', 'FI'].includes(code))
   const responsibleReady = !targetEu || Boolean(specs.manufacturer && specs.euResponsiblePerson && specs.warnings)
   const supplierReady = supplier.verified === true && Boolean(supplier.url || supplier.name) && Boolean(supplier.shipsTo)
@@ -89,6 +90,7 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const commercialScore = Number(clamp(evidenceIdentity + demandRobustness + supplierScore + complianceScore + costScore + mediaScore - saturationPenalty).toFixed(2))
 
   const missingRequirements: string[] = []
+  if (!scopeConfirmed) missingRequirements.push('确认其为可上架的实体商品（排除人物、赛事、票务和纯服务）')
   if (!identityConfirmed) missingRequirements.push('品牌+型号或GTIN/MPN身份信息')
   if (!responsibleReady) missingRequirements.push('制造商、欧盟责任主体和警示信息')
   if (!supplierReady) missingRequirements.push('已核实供应商、可送国家、交期和退货资料')
@@ -98,16 +100,16 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   if (riskFlags.length) missingRequirements.push('解决全部安全、监管、物流和知识产权风险')
 
   const blocked = blockedTerm || safetyMatches.length > 0
-  const reusable = !blocked && !riskFlags.length && identityConfirmed && responsibleReady && supplierReady && authorizedMedia.length > 0 && completeness >= 85 && confidence >= 0.75
+  const reusable = scopeConfirmed && !blocked && !riskFlags.length && identityConfirmed && responsibleReady && supplierReady && authorizedMedia.length > 0 && completeness >= 85 && confidence >= 0.75
   const previousPeak = Number(product.peak_heat_score || 0)
-  const status = reusable || Math.max(previousPeak, researchHeatScore) >= 60 ? 'ACTIVE' : 'STAGING'
+  const status = reusable || (scopeConfirmed && Math.max(previousPeak, researchHeatScore) >= 60) ? 'ACTIVE' : 'STAGING'
   const first = product.first_evidence_at
   const band = ageBand(first)
   const daysSinceFirst = Math.max(0, Math.floor((Date.now() - new Date(first).getTime()) / 86_400_000))
-  const lifecycle = daysSinceFirst <= 7 ? 'NEW' : researchHeatScore >= 80 ? 'ACCELERATING' : researchHeatScore >= 60 ? 'RISING' : researchHeatScore >= 40 ? 'COOLING' : 'WATCH'
+  const lifecycle = !scopeConfirmed ? 'WATCH' : daysSinceFirst <= 7 ? 'NEW' : researchHeatScore >= 80 ? 'ACCELERATING' : researchHeatScore >= 60 ? 'RISING' : researchHeatScore >= 40 ? 'COOLING' : 'WATCH'
   const trendStartAt = recent7 >= 8 && families.size >= 2 ? [...events].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime())[0]?.observedAt || null : null
   const grade = blocked ? 'BLOCKED' : reusable ? commercialScore >= 75 ? 'A' : commercialScore >= 60 ? 'B' : 'C' : 'RESEARCH_ONLY'
-  const researchReason = researchHeatScore >= 80 ? '爆发研究品：多源热度显著' : researchHeatScore >= 60 ? '上升研究品：达到不可复用研究保留门槛' : '普通热度：仅在30天待复核区观察'
+  const researchReason = !scopeConfirmed ? '范围待确认：当前线索不能证明它是可上架实体商品，不进入正式库' : researchHeatScore >= 80 ? '爆发研究品：多源热度显著' : researchHeatScore >= 60 ? '上升研究品：达到不可复用研究保留门槛' : '普通热度：仅在30天待复核区观察'
   const restrictionReason = reusable ? '已通过当前系统级复用初筛' : blocked ? riskFlags.join('；') : missingRequirements.join('；') || '尚未满足商业复用条件'
 
   return {
