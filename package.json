@@ -1,0 +1,39 @@
+{
+  "name": "cross-border-product-radar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "跨境热销商品雷达：可复用与不可复用完全分库版",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "init": "tsx 采集程序/src/cli.ts init",
+    "collect": "tsx 采集程序/src/cli.ts collect",
+    "collect:cloud": "tsx 采集程序/src/cli.ts collect --cloud",
+    "analyze": "tsx 采集程序/src/cli.ts analyze",
+    "export": "tsx 采集程序/src/cli.ts export",
+    "backup": "tsx 采集程序/src/cli.ts backup",
+    "doctor": "tsx 采集程序/src/cli.ts doctor",
+    "serve": "tsx 采集程序/src/cli.ts serve",
+    "sync": "tsx 采集程序/src/cli.ts sync",
+    "prune": "tsx 采集程序/src/cli.ts prune",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test 采集程序/tests/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run doctor"
+  },
+  "dependencies": {
+    "@mozilla/readability": "0.6.0",
+    "cheerio": "1.2.0",
+    "crawlee": "3.18.1",
+    "fast-xml-parser": "5.11.1",
+    "jsdom": "29.0.1",
+    "sharp": "0.35.4",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2"
+  }
+}

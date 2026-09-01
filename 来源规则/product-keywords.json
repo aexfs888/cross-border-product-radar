@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "productTerms": [
+    "gadget","device","organizer","cleaner","lamp","light","bottle","bag","brush","charger","blanket","pillow","toy","kitchen","pet","beauty","skincare","tool","travel","outdoor","garden","car","phone","headphones","camera","watch","shoes","dress","decor","coffee","blender","fan","heater","humidifier","massager","trimmer","vacuum","storage","holder","roller","mop","air fryer","portable","rechargeable",
+    "收纳","清洁","灯","水杯","背包","刷","充电器","毯","枕","玩具","厨房","宠物","美容","护肤","工具","旅行","户外","园艺","汽车","手机","耳机","相机","手表","鞋","装饰","咖啡机","搅拌机","风扇","加热器","加湿器","按摩器","修剪器"
+  ],
+  "ipRiskTerms": [
+    "disney","pixar","marvel","pokemon","pokémon","nike","adidas","gucci","louis vuitton","star wars","hello kitty","barbie","harry potter","nintendo","playstation","lego","minecraft","sanrio","nba","nfl","batman","superman","snoopy","fortnite","roblox","ferrari"
+  ],
+  "regulatedTerms": [
+    "supplement","vitamin","medical","therapy","pain relief","weight loss","blood pressure","diabetes","fertility","pregnancy","baby food","laser","radio frequency","tooth whitening","保健品","维生素","医疗","治疗","减肥","婴儿食品"
+  ],
+  "blockedProductTerms": [
+    "counterfeit","fake passport","illegal drug","weapon","ammo","explosive","盗版","假证","非法药物"
+  ],
+  "logisticsRiskTerms": [
+    "battery","lithium","liquid","magnet","flammable","aerosol","blade","glass","ceramic","oversize","电池","锂电","液体","磁性","易燃","喷雾","刀片","玻璃","陶瓷"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "ageRecipient": "age1rszyt558an3shucyawpw3u2vahk402ts5hp5t8hutgvst69p0v9qnwdyrh",
+  "signingPublicKeyBase64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQUE1OHlqOVNuanp2OTBzQ3VtanpHdTYwS21PU0xSTUhHSFJMak9zTWNVVTQ9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+  "note": "这些是公钥信息，可以提交到公开 GitHub；私钥永远不能提交。"
+}

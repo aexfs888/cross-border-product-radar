@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "network": {
+    "httpsOnly": true,
+    "maxRedirects": 3,
+    "maxResponseBytes": 5242880,
+    "maxRequestsPerRun": 250,
+    "perDomainConcurrency": 1,
+    "minDelayMs": 2000,
+    "timeoutMs": 20000,
+    "retries": 2,
+    "pauseAfterConsecutiveFailures": 3,
+    "pauseHours": 12
+  },
+  "automatic": [
+    {
+      "id": "google-trends-rss",
+      "family": "DEMAND",
+      "adapter": "GOOGLE_TRENDS_RSS",
+      "enabled": true,
+      "endpointTemplate": "https://trends.google.com/trending/rss?geo={geo}",
+      "policy": "PUBLIC_FEED",
+      "rights": "LINK_ONLY"
+    },
+    {
+      "id": "gdelt-product-news",
+      "family": "NEWS",
+      "adapter": "GDELT_DOC",
+      "enabled": true,
+      "endpoint": "https://api.gdeltproject.org/api/v2/doc/doc",
+      "query": "(\"viral product\" OR \"selling out\" OR \"must-have gadget\" OR \"TikTok made me buy it\" OR \"best-selling product\")",
+      "maxRecords": 75,
+      "timespan": "7d",
+      "policy": "PUBLIC_API",
+      "rights": "LINK_ONLY"
+    },
+    {
+      "id": "us-cpsc-recalls",
+      "family": "SAFETY",
+      "adapter": "CPSC_XML",
+      "enabled": true,
+      "endpoint": "https://www.saferproducts.gov/RestWebServices/Recall",
+      "lookbackDays": 90,
+      "policy": "PUBLIC_API",
+      "rights": "FACTS_ONLY"
+    },
+    {
+      "id": "uk-opss-alerts",
+      "family": "SAFETY",
+      "adapter": "ATOM_SAFETY",
+      "enabled": true,
+      "endpoint": "https://www.gov.uk/product-safety-alerts-reports-recalls.atom",
+      "countryCode": "GB",
+      "policy": "PUBLIC_FEED",
+      "rights": "FACTS_ONLY"
+    },
+    {
+      "id": "canada-consumer-product-recalls",
+      "family": "SAFETY",
+      "adapter": "GENERIC_RSS_SAFETY",
+      "enabled": true,
+      "endpoint": "https://recalls-rappels.canada.ca/en/feed/consumer-products-alerts-recalls",
+      "countryCode": "CA",
+      "maxRecords": 100,
+      "policy": "PUBLIC_FEED",
+      "rights": "FACTS_ONLY"
+    },
+    {
+      "id": "australia-accc-recalls",
+      "family": "SAFETY",
+      "adapter": "GENERIC_RSS_SAFETY",
+      "enabled": true,
+      "endpoint": "https://www.productsafety.gov.au/rss/recalls.xml",
+      "countryCode": "AU",
+      "maxRecords": 250,
+      "policy": "PUBLIC_FEED",
+      "rights": "FACTS_ONLY"
+    },
+    {
+      "id": "new-zealand-product-recalls",
+      "family": "SAFETY",
+      "adapter": "SITEMAP_SAFETY",
+      "enabled": true,
+      "endpoint": "https://www.productsafety.govt.nz/sitemap.xml",
+      "countryCode": "NZ",
+      "lookbackDays": 180,
+      "maxRecords": 250,
+      "policy": "PUBLIC_SITEMAP",
+      "rights": "FACTS_ONLY"
+    },
+    {
+      "id": "ecb-reference-rates",
+      "family": "FX",
+      "adapter": "ECB_XML",
+      "enabled": true,
+      "endpoint": "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+      "policy": "PUBLIC_FEED",
+      "rights": "FACTS_ONLY"
+    }
+  ],
+  "optionalDisabled": [
+    {"id":"common-crawl-index","reason":"必须先配置获准域名白名单，默认关闭"},
+    {"id":"eu-safety-gate","reason":"覆盖爱尔兰、挪威、瑞典、丹麦和芬兰；官方公开检索入口保留人工复核，未发现稳定且有明确自动化文档的接口，因此不逆向调用"},
+    {"id":"switzerland-recallswiss","reason":"瑞士 RecallSwiss/BLV 官方入口保留人工复核，未发现稳定公开自动接口"},
+    {"id":"google-trends-alpha","reason":"需要免费账号及单独授权"},
+    {"id":"meta-ad-library-api","reason":"需要身份验证和免费 API 授权"},
+    {"id":"youtube-data-api","reason":"需要免费 API 密钥"},
+    {"id":"pinterest-api","reason":"需要免费开发者授权"}
+  ],
+  "manualOnlyDomains": [
+    "tiktok.com",
+    "amazon.com",
+    "amazon.co.uk",
+    "temu.com",
+    "aliexpress.com",
+    "etsy.com",
+    "wipo.int",
+    "uspto.gov",
+    "euipo.europa.eu"
+  ],
+  "blockedAccessPatterns": [
+    "login-required",
+    "paywall",
+    "captcha",
+    "drm",
+    "credential-harvesting",
+    "anti-bot-bypass"
+  ]
+}

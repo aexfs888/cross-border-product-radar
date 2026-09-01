@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "countries": [
+    {"code":"GB","nameZh":"英国","nameEn":"United Kingdom","currency":"GBP","hemisphere":"NORTH","locales":["en-GB"],"googleTrendsGeo":"GB"},
+    {"code":"US","nameZh":"美国","nameEn":"United States","currency":"USD","hemisphere":"NORTH","locales":["en-US"],"googleTrendsGeo":"US"},
+    {"code":"AU","nameZh":"澳大利亚","nameEn":"Australia","currency":"AUD","hemisphere":"SOUTH","locales":["en-AU"],"googleTrendsGeo":"AU"},
+    {"code":"CA","nameZh":"加拿大","nameEn":"Canada","currency":"CAD","hemisphere":"NORTH","locales":["en-CA","fr-CA"],"googleTrendsGeo":"CA"},
+    {"code":"NZ","nameZh":"新西兰","nameEn":"New Zealand","currency":"NZD","hemisphere":"SOUTH","locales":["en-NZ"],"googleTrendsGeo":"NZ"},
+    {"code":"CH","nameZh":"瑞士","nameEn":"Switzerland","currency":"CHF","hemisphere":"NORTH","locales":["de-CH","fr-CH","it-CH"],"googleTrendsGeo":"CH"},
+    {"code":"IE","nameZh":"爱尔兰","nameEn":"Ireland","currency":"EUR","hemisphere":"NORTH","locales":["en-IE","ga-IE"],"googleTrendsGeo":"IE"},
+    {"code":"NO","nameZh":"挪威","nameEn":"Norway","currency":"NOK","hemisphere":"NORTH","locales":["nb-NO","nn-NO","en"],"googleTrendsGeo":"NO"},
+    {"code":"SE","nameZh":"瑞典","nameEn":"Sweden","currency":"SEK","hemisphere":"NORTH","locales":["sv-SE","en"],"googleTrendsGeo":"SE"},
+    {"code":"DK","nameZh":"丹麦","nameEn":"Denmark","currency":"DKK","hemisphere":"NORTH","locales":["da-DK","en"],"googleTrendsGeo":"DK"},
+    {"code":"FI","nameZh":"芬兰","nameEn":"Finland","currency":"EUR","hemisphere":"NORTH","locales":["fi-FI","sv-FI","en"],"googleTrendsGeo":"FI"}
+  ]
+}

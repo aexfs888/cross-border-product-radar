@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>跨境热销商品雷达</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">11 国 · 免费公开来源 · 证据优先</p><h1>跨境热销商品雷达</h1><p>只显示可复用商品和高热度不可复用研究品。普通热度不可复用商品不会进入研究库。</p></div><button id="refresh">刷新数据</button></header>
+    <section class="notice"><strong>重要：</strong>热度是研究信号，不是销量或利润证明；上架前仍需人工核验供应、合规和授权。</section>
+    <section class="cards">
+      <article><span>可复用商品</span><b id="reusable">—</b><small>全部复用闸门通过</small></article>
+      <article><span>高热不可复用</span><b id="nonReusableHot">—</b><small>热度 ≥ 60，仅供研究</small></article>
+      <article><span>30天待复核</span><b id="staging">—</b><small>不会进入研究报表</small></article>
+      <article><span>官方安全记录</span><b id="safety">—</b><small>独立保留与匹配</small></article>
+    </section>
+    <section class="panel"><div class="panel-head"><h2>当前正式商品</h2><select id="bucket"><option value="">两个正式库</option><option value="REUSABLE">可复用</option><option value="NON_REUSABLE">高热不可复用</option></select></div><div id="products" class="products"><p class="empty">正在读取…</p></div></section>
+    <section class="panel"><h2>来源与系统状态</h2><div id="sources" class="sources"></div><p id="integrity" class="integrity"></p></section>
+  </main><script src="app.js"></script>
+</body></html>
