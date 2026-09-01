@@ -3,38 +3,68 @@ $projectRoot = 'E:\跨境热销商品'
 $stateFile = Join-Path $projectRoot '系统数据\cloud-state\last-github-run.json'
 $inbox = Join-Path $projectRoot '系统数据\cloud-inbox'
 $tempBase = [System.IO.Path]::GetFullPath((Join-Path $projectRoot '临时文件'))
-. (Join-Path $PSScriptRoot 'github-run-selection.ps1')
+$mirrorBase = 'https://raw.githubusercontent.com/aexfs888/cross-border-product-radar/encrypted-radar-packages'
+
+function Get-Sha256Hex([string]$Path) {
+  return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Assert-SafeFileName([string]$Name) {
+  if ([string]::IsNullOrWhiteSpace($Name) -or $Name.Length -gt 240 -or [System.IO.Path]::GetFileName($Name) -ne $Name -or $Name.Contains('..')) {
+    throw "加密镜像文件名安全校验失败：$Name"
+  }
+}
+
+function Invoke-RadarDownload([string]$Uri, [string]$Destination) {
+  Invoke-WebRequest -Uri $Uri -OutFile $Destination -UseBasicParsing -MaximumRedirection 3
+}
 
 Set-Location -LiteralPath $projectRoot
-gh auth status *> $null
-if ($LASTEXITCODE -ne 0) { throw 'GitHub 尚未登录。请先运行“⑥连接GitHub云端采集.cmd”。' }
 
 $lastRun = 0
 if (Test-Path -LiteralPath $stateFile) {
   $saved = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
   $lastRun = [long]$saved.lastRunId
 }
-$runJsonLines = @(gh run list --workflow cloud-collect.yml --status success --limit 30 --json databaseId,createdAt)
-if ($LASTEXITCODE -ne 0) { throw '读取 GitHub 成功运行列表失败。' }
-$runJson = $runJsonLines -join [Environment]::NewLine
-$runs = @(ConvertFrom-RadarRunListJson -Json $runJson)
-$pending = @(Select-RadarPendingRuns -Runs $runs -LastRunId $lastRun)
+
+try {
+  $indexResponse = Invoke-WebRequest -Uri "$mirrorBase/index.json" -UseBasicParsing -MaximumRedirection 3
+} catch {
+  $statusCode = $null
+  if ($_.Exception.Response) { $statusCode = [int]$_.Exception.Response.StatusCode }
+  if ($statusCode -eq 404) { Write-Host '公共加密包镜像尚未建立；等待下一轮 GitHub 云端采集发布。'; exit 0 }
+  throw "读取 GitHub 公共加密包索引失败：$($_.Exception.Message)"
+}
+$index = $indexResponse.Content | ConvertFrom-Json
+if ($index.schemaVersion -ne 1 -or $index.kind -ne 'encrypted-product-radar-mirror' -or $null -eq $index.packages) { throw 'GitHub 公共加密包索引格式不正确。' }
+$pending = @($index.packages | Where-Object { $_.githubRunId -match '^\d{6,20}$' -and [long]$_.githubRunId -gt $lastRun } | Sort-Object { [long]$_.githubRunId })
 if ($pending.Count -eq 0) { Write-Host '没有新的加密采集包。'; exit 0 }
 
 New-Item -ItemType Directory -Force -Path $inbox | Out-Null
 foreach ($run in $pending) {
-  $runId = [long]$run.databaseId
+  $runId = [long]$run.githubRunId
+  if ($null -eq $run.files -or @($run.files).Count -ne 3) { throw "加密镜像运行 $runId 的文件清单不完整。" }
   $downloadDir = [System.IO.Path]::GetFullPath((Join-Path $tempBase "github-run-$runId"))
   if (-not $downloadDir.StartsWith($tempBase, [System.StringComparison]::OrdinalIgnoreCase)) { throw '临时目录安全校验失败' }
   New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
   try {
-    gh run download $runId --name "encrypted-radar-$runId" --dir $downloadDir
-    if ($LASTEXITCODE -ne 0) { throw "下载运行 $runId 失败" }
-    Get-ChildItem -LiteralPath $downloadDir -File | Where-Object { $_.Name -match '\.(age|json|sig)$' } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $inbox $_.Name) -Force }
+    foreach ($file in @($run.files)) {
+      $name = [string]$file.name
+      Assert-SafeFileName $name
+      if ($name -notmatch '(\.age|\.manifest\.json|\.manifest\.json\.sig)$') { throw "加密镜像包含未允许文件：$name" }
+      $expectedHash = [string]$file.sha256
+      if ($expectedHash -notmatch '^[a-fA-F0-9]{64}$') { throw "加密镜像文件哈希格式不正确：$name" }
+      $destination = Join-Path $downloadDir $name
+      Invoke-RadarDownload -Uri "$mirrorBase/packages/$runId/$name" -Destination $destination
+      if ((Get-Sha256Hex $destination) -ne $expectedHash.ToLowerInvariant()) { throw "加密镜像文件哈希不匹配：$name" }
+      Copy-Item -LiteralPath $destination -Destination (Join-Path $inbox $name) -Force
+    }
     npm run sync
     if ($LASTEXITCODE -ne 0) { throw "验签、解密或入库失败：$runId" }
     $stateDirectory = Split-Path -Parent $stateFile; New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
-    @{ lastRunId = $runId; syncedAt = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding UTF8
+    $temporaryState = "$stateFile.$PID.tmp"
+    @{ lastRunId = $runId; syncedAt = (Get-Date).ToUniversalTime().ToString('o'); transport = 'public-encrypted-mirror' } | ConvertTo-Json | Set-Content -LiteralPath $temporaryState -Encoding UTF8
+    Move-Item -LiteralPath $temporaryState -Destination $stateFile -Force
   } finally {
     if (Test-Path -LiteralPath $downloadDir) {
       $resolved = [System.IO.Path]::GetFullPath($downloadDir)

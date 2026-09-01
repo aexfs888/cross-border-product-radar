@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: encrypted-product-collector
@@ -68,3 +68,26 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+      - name: Publish encrypted package to the public no-login mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          mirror="$RUNNER_TEMP/encrypted-radar-mirror"
+          if git ls-remote --exit-code --heads origin encrypted-radar-packages >/dev/null 2>&1; then
+            git fetch --depth=1 origin encrypted-radar-packages
+            git worktree add --detach "$mirror" FETCH_HEAD
+            git -C "$mirror" switch -c encrypted-radar-packages
+          else
+            git worktree add --detach "$mirror"
+            git -C "$mirror" switch --orphan encrypted-radar-packages
+            git -C "$mirror" rm -rf . --ignore-unmatch
+            printf '%s\n' '*' '!.gitignore' '!index.json' '!packages/' '!packages/*/' '!packages/*/*.age' '!packages/*/*.manifest.json' '!packages/*/*.manifest.json.sig' > "$mirror/.gitignore"
+          fi
+          RADAR_PUBLISH_ROOT="$mirror" node "$GITHUB_WORKSPACE/采集程序/scripts/publish-encrypted-mirror.mjs"
+          git -C "$mirror" config user.name "cross-border-product-radar[bot]"
+          git -C "$mirror" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$mirror" add --all
+          if ! git -C "$mirror" diff --cached --quiet; then
+            git -C "$mirror" commit -m "Publish encrypted package $GITHUB_RUN_ID"
+            git -C "$mirror" push origin HEAD:encrypted-radar-packages
+          fi
