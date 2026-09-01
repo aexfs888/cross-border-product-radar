@@ -17,6 +17,28 @@ function runExporter(inputPath: string, outputPath: string): Record<string, unkn
   try { return JSON.parse(lastLine) as Record<string, unknown> } catch { return { ok: true, message: result.stdout.trim(), outputPath } }
 }
 
+function versionedOutputPath(outputPath: string): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+  const extension = path.extname(outputPath)
+  return path.join(path.dirname(outputPath), `${path.basename(outputPath, extension)}-最新待替换-${stamp}${extension}`)
+}
+
+function exportWithoutOverwritingOpenFile(inputPath: string, outputPath: string): Record<string, unknown> {
+  try {
+    return runExporter(inputPath, outputPath)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (!/(?:EBUSY|EPERM|resource busy or locked)/i.test(detail)) throw error
+    const fallbackPath = versionedOutputPath(outputPath)
+    const fallbackResult = runExporter(inputPath, fallbackPath)
+    return {
+      ...fallbackResult,
+      outputPath: fallbackPath,
+      warning: `固定报表正被打开，已安全生成最新待替换版本：${fallbackPath}`,
+    }
+  }
+}
+
 export async function exportReports(): Promise<Record<string, unknown>> {
   await fsp.mkdir(paths.reports, { recursive: true }); await fsp.mkdir(paths.temp, { recursive: true })
   const store = new RadarStore()
@@ -35,8 +57,8 @@ export async function exportReports(): Promise<Record<string, unknown>> {
   await atomicWrite(nonReusableInput, `${JSON.stringify(nonReusable)}\n`)
   const reusableOutput = path.join(paths.reports, '可复用商品.xlsx')
   const nonReusableOutput = path.join(paths.reports, '不可复用商品研究.xlsx')
-  const reusableResult = runExporter(reusableInput, reusableOutput)
-  const nonReusableResult = runExporter(nonReusableInput, nonReusableOutput)
+  const reusableResult = exportWithoutOverwritingOpenFile(reusableInput, reusableOutput)
+  const nonReusableResult = exportWithoutOverwritingOpenFile(nonReusableInput, nonReusableOutput)
   await fsp.rm(reusableInput, { force: true }); await fsp.rm(nonReusableInput, { force: true })
   return { ok: true, reusable: reusableResult, nonReusable: nonReusableResult, outputs: [reusableOutput, nonReusableOutput] }
 }

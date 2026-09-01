@@ -132,6 +132,33 @@ test('人工公开链接只作为研究入口，不会使商品获得可复用�
   store.close()
 })
 
+test('人工公开链接不会提高商品热度、可信度或商业分', async () => {
+  const imported = await publicResearchLinkEvents(paths.publicResearchLinks, 'test-links')
+  const publicLink = imported.events.find((item) => item.productHint?.originalName === 'Cloudlight Soft Glow Diffused Blush')!
+  const historical = event(89, { name: 'Cloudlight Soft Glow Diffused Blush', family: 'CREATIVE', type: 'CREATIVE', price: 18.99 })
+  historical.sourceId = 'pipiads-offline-history-20260822'
+  historical.sourceUrl = 'local-history://pipiads/20260822/cloudlight'
+  historical.policyDecision = 'MANUAL_LINK_ONLY'
+  historical.metrics = { price: 18.99, currency: 'USD', creativeCount: 20, adSignal: 67.6 }
+
+  const withoutLink = new RadarStore({ memory: true })
+  withoutLink.ingestEvents([historical])
+  const baselineProduct = withoutLink.listProducts(undefined, true)[0]
+  const baseline = analyze(withoutLink, baselineProduct.id).analysis
+
+  const withLink = new RadarStore({ memory: true })
+  withLink.ingestEvents([historical, publicLink])
+  const linkedProduct = withLink.listProducts(undefined, true)[0]
+  const linked = analyze(withLink, linkedProduct.id).analysis
+
+  assert.equal(linked.researchHeatScore, baseline.researchHeatScore)
+  assert.equal(linked.confidence, baseline.confidence)
+  assert.equal(linked.commercialScore, baseline.commercialScore)
+  assert.equal(linked.reuseBucket, 'NON_REUSABLE')
+  assert.ok(baseline.researchHeatScore >= 60)
+  withoutLink.close(); withLink.close()
+})
+
 test('普通热度不可复用商品30天后删除详情并留下匿名墓碑', () => {
   const store = new RadarStore({ memory: true })
   const old = new Date(Date.now() - 40 * 86_400_000).toISOString()

@@ -14,13 +14,13 @@ import { RadarStore } from './store.js'
 import { atomicWrite, createId, requestBudgetSnapshot, resetRequestBudget, safeJson, sha256 } from './utils.js'
 import type { CollectorEvent } from './types.js'
 
-export async function analyzeAll(store: RadarStore): Promise<{ analyzed: number, active: number, staging: number }> {
+export async function analyzeAll(store: RadarStore, options: { resetPeakForSourceId?: string } = {}): Promise<{ analyzed: number, active: number, staging: number }> {
   const safety = store.getSafetyRecords(); let analyzed = 0; let active = 0; let staging = 0
   for (const product of store.listProducts(undefined, true)) {
     const events = store.getEvents(product.id); const media = store.getMedia(product.id)
     const analysis = analyzeProduct(product, events, media, safety)
     const dossier = buildDossier(product, analysis, events, media)
-    store.updateAnalysis(product, analysis, dossier)
+    store.updateAnalysis(product, analysis, dossier, { resetPeak: Boolean(options.resetPeakForSourceId && events.some((event) => event.sourceId === options.resetPeakForSourceId)) })
     const refreshed = store.getProduct(product.id)!
     // 该函数也负责把降级到待复核区的旧档案移出正式两库，避免残留文件造成误解。
     await writeDossierFile(refreshed, dossier)

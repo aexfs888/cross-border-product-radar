@@ -273,9 +273,9 @@ export class RadarStore {
   getCountrySignals(productId: string): Record<string, unknown>[] { return this.db.prepare('SELECT * FROM country_signals WHERE product_id=? ORDER BY signal_date').all(productId) as Record<string, unknown>[] }
   getSafetyRecords(): Record<string, unknown>[] { return this.db.prepare('SELECT * FROM safety_records ORDER BY published_at DESC LIMIT 10000').all() as Record<string, unknown>[] }
 
-  updateAnalysis(product: ProductRecord, analysis: ProductAnalysis, dossier: Record<string, unknown>): void {
+  updateAnalysis(product: ProductRecord, analysis: ProductAnalysis, dossier: Record<string, unknown>, options: { resetPeak?: boolean } = {}): void {
     const previousBucket = product.reuse_bucket
-    const newPeak = Math.max(Number(product.peak_heat_score || 0), analysis.researchHeatScore)
+    const newPeak = options.resetPeak ? analysis.researchHeatScore : Math.max(Number(product.peak_heat_score || 0), analysis.researchHeatScore)
     this.db.prepare(`UPDATE products SET trend_start_at=?,trend_age_band=?,lifecycle=?,research_heat_score=?,peak_heat_score=?,
       commercial_score=?,completeness=?,confidence=?,reuse_bucket=?,commercial_grade=?,rights_status=?,risk_flags_json=?,research_reason=?,
       restriction_reason=?,missing_requirements_json=?,status=?,dossier_json=?,updated_at=? WHERE id=?`)

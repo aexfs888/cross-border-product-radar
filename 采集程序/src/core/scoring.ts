@@ -19,10 +19,14 @@ function tokenSimilarity(a: string, b: string): number {
 
 export function analyzeProduct(product: ProductRecord, events: CollectorEvent[], media: Record<string, unknown>[], safetyRecords: Record<string, unknown>[]): ProductAnalysis {
   const now = Date.now()
+  // 公开网页研究链接只保存为跳转、核对与证据链入口。它不代表该页面
+  // 已证明商品身份、真实需求、价格、供应或商业可用性，因此绝不能影响分数或闸门。
+  // 注意：离线历史广告同为仅研究来源，但有独立的、允许使用的广告代理分值，不能一概排除。
+  const scoringEvents = events.filter((event) => event.sourceId !== 'manual-public-product-links-20260901')
   const signalWeights = new Map<string, number>()
   const families = new Set<string>(); const countries = new Set<string>(); const days = new Set<string>()
   let latest = 0; let maxSearchVolume = 0; let creativeCount = 0; let commerceSignal = 0; let evidenceSum = 0; let historicalAdSignal = 0
-  for (const event of events) {
+  for (const event of scoringEvents) {
     const time = new Date(event.publishedAt || event.observedAt).getTime()
     const day = new Date(time).toISOString().slice(0, 10)
     const weight = ({ DEMAND: 4, COMMERCE: 3, CREATIVE: 2, NEWS: 1, SAFETY: 0, FX: 0 } as Record<string, number>)[event.sourceFamily] || 1
@@ -70,19 +74,19 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const authorizedMedia = media.filter((item) => item.rights_status === 'AUTHORIZED')
   const rightsStatus: RightsStatus = authorizedMedia.length ? 'AUTHORIZED' : media.some((item) => item.rights_status === 'PROHIBITED') ? 'PROHIBITED' : media.length ? 'LINK_ONLY' : 'UNKNOWN'
   const identityConfirmed = Boolean(product.gtin || product.mpn || (product.brand && product.model))
-  const scopeConfirmed = isProductLike(product.original_name, rules.productTerms, rules.nonProductTerms) || identityConfirmed || events.some((event) => event.sourceFamily === 'COMMERCE' || event.eventType === 'SAFETY')
+  const scopeConfirmed = isProductLike(product.original_name, rules.productTerms, rules.nonProductTerms) || identityConfirmed || scoringEvents.some((event) => event.sourceFamily === 'COMMERCE' || event.eventType === 'SAFETY')
   const targetEu = [...countries].some((code) => ['IE', 'SE', 'DK', 'FI'].includes(code))
   const responsibleReady = !targetEu || Boolean(specs.manufacturer && specs.euResponsiblePerson && specs.warnings)
   const supplierReady = supplier.verified === true && Boolean(supplier.url || supplier.name) && Boolean(supplier.shipsTo)
-  const costReady = Boolean(events.some((event) => Number(event.metrics?.price || 0) > 0))
+  const costReady = Boolean(scoringEvents.some((event) => Number(event.metrics?.price || 0) > 0))
 
   const mandatoryChecks = [
     Boolean(product.original_name), identityConfirmed, Boolean(product.description_zh), safeJson(product.use_cases_json, []).length > 0,
     Object.keys(specs).length > 0, countries.size > 0, costReady, supplierReady, media.length > 0,
-    authorizedMedia.length > 0, responsibleReady, events.length > 0,
+    authorizedMedia.length > 0, responsibleReady, scoringEvents.length > 0,
   ]
   const completeness = Number((mandatoryChecks.filter(Boolean).length / mandatoryChecks.length * 100).toFixed(2))
-  const averageEvidence = events.length ? evidenceSum / events.length : 0
+  const averageEvidence = scoringEvents.length ? evidenceSum / scoringEvents.length : 0
   const confidence = Number(clamp(averageEvidence * 55 + Math.min(25, families.size * 8) + Math.min(20, countries.size * 5), 0, 100).toFixed(2)) / 100
 
   const evidenceIdentity = clamp((identityConfirmed ? 12 : 3) + averageEvidence * 8, 0, 20)
@@ -91,7 +95,7 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const complianceScore = blockedTerm || safetyMatches.length ? 0 : responsibleReady && !hasAny(rules.regulatedTerms) ? 20 : 6
   const costScore = costReady ? 10 : 0
   const mediaScore = authorizedMedia.length ? 10 : 0
-  const saturationPenalty = events.length > 20 && families.size <= 1 ? 10 : 0
+  const saturationPenalty = scoringEvents.length > 20 && families.size <= 1 ? 10 : 0
   const commercialScore = Number(clamp(evidenceIdentity + demandRobustness + supplierScore + complianceScore + costScore + mediaScore - saturationPenalty).toFixed(2))
 
   const missingRequirements: string[] = []
@@ -112,7 +116,7 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const band = ageBand(first)
   const daysSinceFirst = Math.max(0, Math.floor((Date.now() - new Date(first).getTime()) / 86_400_000))
   const lifecycle = !scopeConfirmed ? 'WATCH' : daysSinceFirst <= 7 ? 'NEW' : researchHeatScore >= 80 ? 'ACCELERATING' : researchHeatScore >= 60 ? 'RISING' : researchHeatScore >= 40 ? 'COOLING' : 'WATCH'
-  const trendStartAt = recent7 >= 8 && families.size >= 2 ? [...events].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime())[0]?.observedAt || null : null
+  const trendStartAt = recent7 >= 8 && families.size >= 2 ? [...scoringEvents].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime())[0]?.observedAt || null : null
   const grade = blocked ? 'BLOCKED' : reusable ? commercialScore >= 75 ? 'A' : commercialScore >= 60 ? 'B' : 'C' : 'RESEARCH_ONLY'
   const researchReason = !scopeConfirmed ? '范围待确认：当前线索不能证明它是可上架实体商品，不进入正式库' : historicalAdSignal > 0 && researchHeatScore >= 60 ? '离线历史广告代理研究品：广告信号达到保留门槛；这不是销量或利润证明' : researchHeatScore >= 80 ? '爆发研究品：多源热度显著' : researchHeatScore >= 60 ? '上升研究品：达到不可复用研究保留门槛' : '普通热度：仅在30天待复核区观察'
   const restrictionReason = reusable ? '已通过当前系统级复用初筛' : blocked ? riskFlags.join('；') : [...new Set([...missingRequirements, ...riskFlags])].join('；') || '尚未满足商业复用条件'
