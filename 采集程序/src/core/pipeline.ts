@@ -82,19 +82,21 @@ export async function syncInbox(): Promise<Record<string, unknown>> {
     const manifests = (await fsp.readdir(paths.inbox)).filter((name) => name.endsWith('.manifest.json'))
     for (const name of manifests) {
       const manifestPath = path.join(paths.inbox, name); const signaturePath = `${manifestPath}.sig`
+      let plainPath = ''
       try {
         if (!fs.existsSync(signaturePath) || !verifyFile(manifestPath, fs.readFileSync(signaturePath, 'utf8').trim())) throw new Error('清单签名无效')
         const manifest = safeJson<Record<string, any>>(fs.readFileSync(manifestPath, 'utf8'), {})
         const encryptedPath = path.join(paths.inbox, String(manifest.encryptedFile)); if (!fs.existsSync(encryptedPath)) throw new Error('加密数据文件缺失')
         if (sha256(fs.readFileSync(encryptedPath)) !== String(manifest.sha256 || '')) throw new Error('加密数据文件 SHA-256 与清单不一致')
-        const plainPath = path.join(paths.temp, `${manifest.runId}.sync.jsonl`); decryptWithAge(encryptedPath, plainPath, keys.identityFile)
+        plainPath = path.join(paths.temp, `${manifest.runId}.sync.jsonl`); decryptWithAge(encryptedPath, plainPath, keys.identityFile)
         const events = fs.readFileSync(plainPath, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as CollectorEvent)
         if (events.length !== Number(manifest.eventCount)) throw new Error('解密后的事件数量与签名清单不一致')
         if (events.some((event) => event.schemaVersion !== '1.0' || !event.eventId || !event.rawHash)) throw new Error('解密包包含无效事件格式')
-        store.ingestEvents(events); await fsp.rm(plainPath, { force: true }); eventsCount += events.length; files += 1
+        store.ingestEvents(events); eventsCount += events.length; files += 1
         const processedDir = path.join(paths.inbox, 'processed'); await fsp.mkdir(processedDir, { recursive: true })
         for (const item of [manifestPath, signaturePath, encryptedPath]) await fsp.rename(item, path.join(processedDir, path.basename(item)))
       } catch (error) { errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`) }
+      finally { if (plainPath) await fsp.rm(plainPath, { force: true }) }
     }
     const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
     store.audit('CLOUD_SYNC_COMPLETE', `同步${files}个加密包、${eventsCount}条事件`, { files, eventsCount, errors, analysis, pruned })

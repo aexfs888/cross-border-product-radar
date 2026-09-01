@@ -34,11 +34,11 @@ async function main(): Promise<void> {
   if (command === 'analyze') {
     const store = new RadarStore(); try { print(await analyzeAll(store)) } finally { store.close() }; return
   }
-  if (command === 'sync') { print(await syncInbox()); return }
-  if (command === 'export') { print(await exportReports()); return }
+  if (command === 'sync') { const result = await syncInbox() as { ok?: boolean }; print(result); if (result.ok === false) process.exitCode = 1; return }
+  if (command === 'export') { const result = await exportReports() as { ok?: boolean }; print(result); if (result.ok === false) process.exitCode = 1; return }
   if (command === 'backup') { print(await createFullBackup()); return }
   if (command === 'prune') { const store = new RadarStore(); try { print(store.pruneLowHeat(30)) } finally { store.close() }; return }
-  if (command === 'doctor') { print(runDoctor()); return }
+  if (command === 'doctor') { const result = runDoctor(); print(result); if (!result.ok) process.exitCode = 1; return }
   if (command === 'health') { print({ output: await writeHealthSnapshot() }); return }
   if (command === 'serve') {
     const port = Number(valueAfter(args, '--port') || 8765); startDashboard(port)
