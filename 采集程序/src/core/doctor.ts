@@ -38,6 +38,17 @@ export function runDoctor(): Record<string, unknown> {
   } catch (error) { checks.push({ name: '数据库完整性', status: 'FAIL', detail: error instanceof Error ? error.message : String(error) }) }
   const reportRuntime = path.join(paths.artifactRuntime, 'node_modules', '@oai', 'artifact-tool')
   checks.push({ name: 'Excel 报表引擎', status: fs.existsSync(reportRuntime) ? 'PASS' : 'WARN', detail: fs.existsSync(reportRuntime) ? '已连接 Codex 本地报表引擎' : '尚未连接报表引擎，采集不受影响，Excel 暂不能生成' })
+  try {
+    const jobsFile = 'E:\\Hermes\\Agent\\cron\\jobs.json'
+    const parsed = JSON.parse(fs.readFileSync(jobsFile, 'utf8')) as { jobs?: Array<Record<string, any>> }
+    const job = parsed.jobs?.find((item) => item.id === '99c97b80b9eb' || item.name === '跨境热销商品雷达-本地同步')
+    const scheduled = Boolean(job?.enabled && job?.state === 'scheduled' && job?.schedule?.kind === 'interval' && Number(job?.schedule?.minutes) === 30 && job?.repeat?.times === null)
+    const lastFailed = job?.last_status === 'error'
+    checks.push({
+      name: 'Hermes 30分钟同步', status: !scheduled ? 'FAIL' : lastFailed ? 'WARN' : 'PASS',
+      detail: !job ? '未找到跨境商品雷达定时任务' : `状态=${job.state}；最近=${job.last_status || '尚未运行'}；下次=${job.next_run_at || '未知'}`,
+    })
+  } catch (error) { checks.push({ name: 'Hermes 30分钟同步', status: 'FAIL', detail: error instanceof Error ? error.message : String(error) }) }
   const gh = spawnSync('gh', ['auth', 'status'], { encoding: 'utf8', windowsHide: true })
   checks.push({ name: 'GitHub 连接', status: gh.status === 0 ? 'PASS' : 'WARN', detail: gh.status === 0 ? 'GitHub CLI 已授权' : '尚未授权 GitHub；本地采集可用，云端全天采集需稍后连接' })
   const keyNames = ['age-identity.txt', 'age-recipient.txt', 'signing-private.pem', 'signing-public.pem', 'hmac-secret.txt']
