@@ -3,6 +3,7 @@ $projectRoot = 'E:\跨境热销商品'
 $stateFile = Join-Path $projectRoot '系统数据\cloud-state\last-github-run.json'
 $inbox = Join-Path $projectRoot '系统数据\cloud-inbox'
 $tempBase = [System.IO.Path]::GetFullPath((Join-Path $projectRoot '临时文件'))
+. (Join-Path $PSScriptRoot 'github-run-selection.ps1')
 
 Set-Location -LiteralPath $projectRoot
 gh auth status *> $null
@@ -13,8 +14,11 @@ if (Test-Path -LiteralPath $stateFile) {
   $saved = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
   $lastRun = [long]$saved.lastRunId
 }
-$runs = @(gh run list --workflow cloud-collect.yml --status success --limit 30 --json databaseId,createdAt | ConvertFrom-Json | Sort-Object databaseId)
-$pending = @($runs | Where-Object { [long]$_.databaseId -gt $lastRun })
+$runJsonLines = @(gh run list --workflow cloud-collect.yml --status success --limit 30 --json databaseId,createdAt)
+if ($LASTEXITCODE -ne 0) { throw '读取 GitHub 成功运行列表失败。' }
+$runJson = $runJsonLines -join [Environment]::NewLine
+$runs = @(ConvertFrom-RadarRunListJson -Json $runJson)
+$pending = @(Select-RadarPendingRuns -Runs $runs -LastRunId $lastRun)
 if ($pending.Count -eq 0) { Write-Host '没有新的加密采集包。'; exit 0 }
 
 New-Item -ItemType Directory -Force -Path $inbox | Out-Null
@@ -43,4 +47,3 @@ if ($LASTEXITCODE -ne 0) { throw 'Excel 报表更新失败' }
 npm run backup
 if ($LASTEXITCODE -ne 0) { throw 'H盘备份失败' }
 Write-Host "已同步 $($pending.Count) 个加密采集包，并完成分库、报表和备份。"
-

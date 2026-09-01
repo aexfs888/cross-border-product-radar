@@ -20,7 +20,8 @@
     "prune": "tsx 采集程序/src/cli.ts prune",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 采集程序/tests/*.test.ts",
-    "check": "npm run typecheck && npm test && npm run doctor"
+    "test:powershell": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File 采集程序/tests/sync-github-runs.test.ps1",
+    "check": "npm run typecheck && npm test && npm run test:powershell && npm run doctor"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
