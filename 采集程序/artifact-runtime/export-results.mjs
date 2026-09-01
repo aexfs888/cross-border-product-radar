@@ -61,6 +61,11 @@ function addTableSheet(name, title, subtitle, headers, rows, widths = []) {
   widths.forEach((width, index) => sheet.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width)
   return sheet
 }
+function formatDateColumns(sheet, columns, rowCount) {
+  if (!rowCount) return
+  const end = 4 + rowCount
+  for (const column of columns) sheet.getRange(`${column}5:${column}${end}`).format.numberFormat = 'yyyy-mm-dd hh:mm:ss'
+}
 
 const overviewName = reusable ? '商品总览' : '商品研究总览'
 const overviewHeaders = ['商品ID', '原始名称', '中文名称', '品牌', '型号', 'GTIN', 'MPN', '类别', '趋势区间', '研究热度', '热度等级', '商业分', '商业级别', '完整度%', '可信度', '素材权利', '当前库', reusable ? '复用资格复核' : '研究保留复核', '判定原因', '商品完整说明摘要', '优点', '缺点/风险', '未知/待补资料', '最近证据时间']
@@ -89,7 +94,8 @@ for (const product of products) for (const [code, block] of Object.entries(produ
   product.id, product.zh_name || product.original_name, code, block.countryName?.value || code, block.evidenceCount?.state || '未知', block.evidenceCount?.value ?? 0,
   block.latestEvidenceAt?.value || '未知', safeText(block.search?.value), safeText(block.news?.value), safeText(block.ads?.value), safeText(block.offers?.value), safeText(block.reviews?.value), safeText(block.publicSales?.value),
 ])
-addTableSheet('国家趋势', '11个目标国家分别表现', '零证据只表示当前获准来源未发现，不代表该国市场绝对没有需求。', ['商品ID', '商品', '国家代码', '国家', '字段状态', '证据数', '最近证据', '搜索', '新闻', '广告', '报价', '评价', '公开销量'], countryRows, [210, 280, 90, 100, 100, 80, 170, 280, 300, 220, 220, 220, 220])
+const countrySheet = addTableSheet('国家趋势', '11个目标国家分别表现', '零证据只表示当前获准来源未发现，不代表该国市场绝对没有需求。', ['商品ID', '商品', '国家代码', '国家', '字段状态', '证据数', '最近证据', '搜索', '新闻', '广告', '报价', '评价', '公开销量'], countryRows, [210, 280, 90, 100, 100, 80, 170, 280, 300, 220, 220, 220, 220])
+formatDateColumns(countrySheet, ['G'], countryRows.length)
 
 const timeRows = []
 for (const product of products) for (const [windowName, block] of Object.entries(product.dossier?.chronology?.timeWindows || {})) timeRows.push([
@@ -99,16 +105,19 @@ for (const product of products) for (const [windowName, block] of Object.entries
 addTableSheet('时间趋势', '七个时间区间趋势证据', '覆盖 0–7、8–15、16–30、31–60、61–90、91–120、121–180 天；不把缺失证据填成销量。', ['商品ID', '商品', '时间区间', '字段状态', '证据数', '来源家族', '国家', '搜索信号', '公开销量信号'], timeRows, [210, 280, 160, 100, 80, 180, 160, 360, 360])
 
 const evidenceRows = products.flatMap((product) => (product.events || []).map((event) => [product.id, product.zh_name || product.original_name, event.eventId, event.sourceId, event.sourceFamily, event.countryCode, event.eventType, event.sourceUrl, event.publishedAt || '未知', event.observedAt, event.evidenceStrength, event.rightsStatus, event.policyDecision, event.rawHash]))
-addTableSheet('证据链', '完整证据链', '每条证据保留编号、原始网址、发布时间、采集时间、强度、权利与政策决定。', ['商品ID', '商品', '证据ID', '来源', '来源家族', '国家', '类型', 'URL', '发布时间', '采集时间', '证据强度', '权利', '采集政策', '原始哈希'], evidenceRows, [210, 260, 250, 170, 110, 80, 100, 420, 170, 170, 100, 110, 150, 250])
+const evidenceSheet = addTableSheet('证据链', '完整证据链', '每条证据保留编号、原始网址、发布时间、采集时间、强度、权利与政策决定。', ['商品ID', '商品', '证据ID', '来源', '来源家族', '国家', '类型', 'URL', '发布时间', '采集时间', '证据强度', '权利', '采集政策', '原始哈希'], evidenceRows, [210, 260, 250, 170, 110, 80, 100, 420, 170, 170, 100, 110, 150, 250])
+formatDateColumns(evidenceSheet, ['I', 'J'], evidenceRows.length)
 
 const auditRows = (data.audits || []).map((item) => [item.created_at, item.type, item.severity, item.message, item.meta_json])
-addTableSheet('运行审计', '运行、转库、清理与备份审计', '记录系统做过什么，不隐藏低热度清理或来源失败。', ['时间', '类型', '严重度', '说明', '细节'], auditRows, [170, 210, 90, 420, 500])
+const auditSheet = addTableSheet('运行审计', '运行、转库、清理与备份审计', '记录系统做过什么，不隐藏低热度清理或来源失败。', ['时间', '类型', '严重度', '说明', '细节'], auditRows, [170, 210, 90, 420, 500])
+formatDateColumns(auditSheet, ['A'], auditRows.length)
 
 if (reusable) {
   const supplyRows = products.map((product) => [product.id, product.zh_name || product.original_name, ...['supplierName', 'supplierUrl', 'supplierVerified', 'moq', 'leadTimeDays', 'shipsTo', 'returnsPolicy', 'logisticsRestrictions'].flatMap((key) => { const item = dossierField(product, `supplyAndLogistics.${key}`); return [item.state, item.value] })])
   addTableSheet('供应与物流', '供应商与物流完整核验', '每个项目均同时显示字段状态和值；未知不得猜测。', ['商品ID', '商品', '供应商状态', '供应商', '网址状态', '网址', '核验状态', '已核验', 'MOQ状态', 'MOQ', '交期状态', '交期天数', '可送国家状态', '可送国家', '退货状态', '退货', '限制状态', '物流限制'], supplyRows, [210, 260, 90, 160, 90, 300, 90, 100, 90, 80, 90, 100, 100, 220, 90, 320, 90, 320])
   const mediaRows = products.flatMap((product) => (product.media || []).filter((item) => item.rights_status === 'AUTHORIZED').map((item) => [product.id, product.zh_name || product.original_name, item.media_type, item.url, item.rights_status, item.license || '未知', item.attribution || '未知', item.event_id, item.created_at]))
-  addTableSheet('可复用素材', '明确允许商业使用的素材', '只列 AUTHORIZED 素材；系统不会下载或搬运未知权利素材。', ['商品ID', '商品', '类型', 'URL', '权利状态', '许可证', '署名要求', '证据ID', '记录时间'], mediaRows, [210, 260, 90, 420, 110, 180, 240, 240, 170])
+  const mediaSheet = addTableSheet('可复用素材', '明确允许商业使用的素材', '只列 AUTHORIZED 素材；系统不会下载或搬运未知权利素材。', ['商品ID', '商品', '类型', 'URL', '权利状态', '许可证', '署名要求', '证据ID', '记录时间'], mediaRows, [210, 260, 90, 420, 110, 180, 240, 240, 170])
+  formatDateColumns(mediaSheet, ['I'], mediaRows.length)
   addTableSheet('授权记录', '素材授权审计记录', '上架前仍需人工确认许可证原文、适用范围、有效期与署名要求。', ['商品ID', '商品', '素材URL', '许可证', '署名', '权利状态', '证据ID'], mediaRows.map((row) => [row[0], row[1], row[3], row[5], row[6], row[4], row[7]]), [210, 260, 420, 220, 260, 110, 240])
   const riskRows = products.map((product) => [product.id, product.zh_name || product.original_name, dossierField(product, 'riskReview.recallAndSafety').state, dossierField(product, 'riskReview.recallAndSafety').value, dossierField(product, 'riskReview.regulatory').value, dossierField(product, 'riskReview.trademarkAndIp').value, dossierField(product, 'riskReview.logistics').value, dossierField(product, 'riskReview.allFlags').value, product.restriction_reason])
   addTableSheet('风险检查', '召回、安全、监管、商标与知识产权风险', '可复用商品应无未解决红色风险；本表是初筛，不替代律师、责任主体或实验室结论。', ['商品ID', '商品', '状态', '召回/安全', '监管', '商标/IP', '物流', '全部风险', '当前结论'], riskRows, [210, 260, 90, 260, 260, 260, 260, 300, 360])
