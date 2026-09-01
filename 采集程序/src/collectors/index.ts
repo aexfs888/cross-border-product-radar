@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
-import { loadCountries, loadKeywordRules } from '../core/config.js'
-import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, nowIso, parseMagnitude, sha256, withRetry } from '../core/utils.js'
+import { loadCountries, loadKeywordRules, loadProductWatchlist } from '../core/config.js'
+import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, normalizeText, nowIso, parseMagnitude, sha256, textHasTerm, withRetry } from '../core/utils.js'
 import type { CollectorEvent, CountryConfig, SourceConfig } from '../core/types.js'
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', removeNSPrefix: true, trimValues: true })
@@ -19,6 +19,18 @@ function parseTrendDate(value: unknown): string | undefined {
   return Number.isFinite(date.getTime()) ? date.toISOString() : undefined
 }
 
+export function matchesWatchlistHeadline(headline: string, query: string): boolean {
+  // 仅接受标题本身明确提及观察词的近期开源文章，避免把泛品类新闻错误挂到具体商品名下。
+  const ignored = new Set(['and', 'the', 'with', 'for', 'from', 'that', 'this', 'light', 'wireless', 'comfort', 'portable', 'double', 'removable', 'open'])
+  if (textHasTerm(headline, query)) return true
+  const units = new Set(['oz', 'ml', 'cm', 'mm', 'in'])
+  const terms = [...new Set(normalizeText(query).split(' ').filter((term) => (term.length >= 3 || /^\d+$/.test(term) || units.has(term)) && !ignored.has(term)))]
+  // 观察词若只剩一个泛化核心词，不能据此认定文章和目标商品有关。
+  if (terms.length < 2) return false
+  const matched = terms.filter((term) => textHasTerm(headline, term)).length
+  return matched >= 2
+}
+
 async function googleTrends(runId: string, source: SourceConfig, countries: CountryConfig[]): Promise<CollectorEvent[]> {
   const rules = loadKeywordRules(); const results: CollectorEvent[] = []
   for (const country of countries) {
@@ -30,7 +42,7 @@ async function googleTrends(runId: string, source: SourceConfig, countries: Coun
       const related = asArray(item?.news_item).map((entry: any) => String(entry?.news_item_title || '')).filter(Boolean)
       // 相关新闻可能偶然提到 phone、car 等商品词，不能据此把人物、赛事、票务或纯服务
       // 误建成商品。趋势标题本身必须具备商品属性；品牌型号可由后续商业证据补充。
-      if (!title || !isProductLike(title, rules.productTerms)) continue
+      if (!title || !isProductLike(title, rules.productTerms, rules.nonProductTerms)) continue
       const sourceUrl = String(item?.link || `https://trends.google.com/trending?geo=${country.googleTrendsGeo}`)
       const base = eventBase(runId, source, sourceUrl, country.code, 'TREND', { title, related, traffic: item?.approx_traffic, country: country.code })
       results.push({
@@ -41,6 +53,30 @@ async function googleTrends(runId: string, source: SourceConfig, countries: Coun
         },
         metrics: { searchVolume: parseMagnitude(item?.approx_traffic) },
         mediaRefs: item?.picture ? [{ url: String(item.picture), type: 'IMAGE', rightsStatus: 'LINK_ONLY' }] : [],
+      })
+    }
+  }
+  return results
+}
+
+async function googleNewsWatchlist(runId: string, source: SourceConfig): Promise<CollectorEvent[]> {
+  const watchlist = loadProductWatchlist(); const results: CollectorEvent[] = []
+  for (const candidate of watchlist.items.slice(0, source.maxRecords || 8)) {
+    const endpoint = new URL('https://news.google.com/rss/search')
+    endpoint.searchParams.set('q', `"${candidate.query}"`); endpoint.searchParams.set('hl', 'en-US'); endpoint.searchParams.set('gl', 'US'); endpoint.searchParams.set('ceid', 'US:en')
+    const parsed = xml.parse(await withRetry(() => fetchText(endpoint.toString())))
+    for (const item of asArray(parsed?.rss?.channel?.item).slice(0, 5)) {
+      const articleTitle = String(item?.title || '').trim(); const sourceUrl = String(item?.link || endpoint)
+      const publishedAt = parseTrendDate(item?.pubDate)
+      const publishedMs = publishedAt ? new Date(publishedAt).getTime() : NaN
+      const cutoff = Date.now() - 180 * 86_400_000
+      if (!articleTitle || !Number.isFinite(publishedMs) || publishedMs < cutoff || publishedMs > Date.now() + 86_400_000 || !matchesWatchlistHeadline(articleTitle, candidate.query)) continue
+      const raw = { watchlist: candidate, articleTitle, publishedAt: item?.pubDate || null, source: item?.source || null }
+      const base = eventBase(runId, source, sourceUrl, 'GLOBAL', 'NEWS', raw)
+      results.push({
+        ...base, publishedAt, evidenceStrength: 0.55,
+        productHint: { originalName: candidate.name, description: 'Google News 公开 RSS 对高热实体商品观察词的匹配；文章只作为当前研究信号，不能替代商品身份、授权、供应或合规核验。', productUrl: sourceUrl },
+        metrics: {}, mediaRefs: [],
       })
     }
   }
@@ -71,7 +107,7 @@ async function gdelt(runId: string, source: SourceConfig): Promise<CollectorEven
   const parsed = JSON.parse(body); const rules = loadKeywordRules(); const results: CollectorEvent[] = []
   for (const article of asArray(parsed?.articles)) {
     const title = String(article?.title || '').trim()
-    if (!title || !isProductLike(title, rules.productTerms)) continue
+    if (!title || !isProductLike(title, rules.productTerms, rules.nonProductTerms)) continue
     const url = canonicalUrl(String(article?.url || endpoint))
     const countryCode = sourceCountryMap[String(article?.sourcecountry || '')] || 'GLOBAL'
     const base = eventBase(runId, source, url, countryCode, 'NEWS', { title, url, domain: article?.domain, language: article?.language, sourcecountry: article?.sourcecountry, seendate: article?.seendate })
@@ -161,6 +197,7 @@ async function ecb(runId: string, source: SourceConfig): Promise<CollectorEvent[
 export async function collectSource(runId: string, source: SourceConfig, countries = loadCountries()): Promise<CollectorEvent[]> {
   switch (source.adapter) {
     case 'GOOGLE_TRENDS_RSS': return googleTrends(runId, source, countries)
+    case 'GOOGLE_NEWS_RSS_WATCHLIST': return googleNewsWatchlist(runId, source)
     case 'GDELT_DOC': return gdelt(runId, source)
     case 'CPSC_XML': return cpsc(runId, source)
     case 'ATOM_SAFETY': return atomSafety(runId, source)

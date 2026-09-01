@@ -65,9 +65,15 @@ export function ageBand(firstSeen: string, now = new Date()): string {
   if (days <= 180) return '121–180天'
   return '180天以上'
 }
-export function isProductLike(text: string, terms: string[]): boolean {
-  const normalized = normalizeText(text)
-  return terms.some((term) => normalized.includes(normalizeText(term)))
+export function textHasTerm(text: string, term: string): boolean {
+  const normalized = normalizeText(text); const needle = normalizeText(term)
+  if (!normalized || !needle) return false
+  // 英文与数字必须整词匹配，避免把 Pete 误判成 pet、把普通新闻片段误判成商品。
+  if (/^[a-z0-9 ]+$/.test(needle)) return ` ${normalized} `.includes(` ${needle} `)
+  return normalized.includes(needle)
+}
+export function isProductLike(text: string, terms: string[], excludedTerms: string[] = []): boolean {
+  return !excludedTerms.some((term) => textHasTerm(text, term)) && terms.some((term) => textHasTerm(text, term))
 }
 
 export function resetRequestBudget(): void { requestsThisRun = 0 }

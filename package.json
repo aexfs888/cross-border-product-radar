@@ -18,6 +18,8 @@
     "serve": "tsx 采集程序/src/cli.ts serve",
     "sync": "tsx 采集程序/src/cli.ts sync",
     "prune": "tsx 采集程序/src/cli.ts prune",
+    "import:pipiads-history": "tsx 采集程序/src/cli.ts import-pipiads-history",
+    "purge-source": "tsx 采集程序/src/cli.ts purge-source",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 采集程序/tests/*.test.ts",
     "test:powershell": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File 采集程序/tests/sync-github-runs.test.ps1",

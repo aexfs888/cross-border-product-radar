@@ -21,7 +21,7 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const now = Date.now()
   const signalWeights = new Map<string, number>()
   const families = new Set<string>(); const countries = new Set<string>(); const days = new Set<string>()
-  let latest = 0; let maxSearchVolume = 0; let creativeCount = 0; let commerceSignal = 0; let evidenceSum = 0
+  let latest = 0; let maxSearchVolume = 0; let creativeCount = 0; let commerceSignal = 0; let evidenceSum = 0; let historicalAdSignal = 0
   for (const event of events) {
     const time = new Date(event.publishedAt || event.observedAt).getTime()
     const day = new Date(time).toISOString().slice(0, 10)
@@ -30,6 +30,7 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
     families.add(event.sourceFamily); if (event.countryCode !== 'GLOBAL') countries.add(event.countryCode); days.add(day)
     latest = Math.max(latest, time); maxSearchVolume = Math.max(maxSearchVolume, Number(event.metrics?.searchVolume || 0))
     creativeCount += Number(event.metrics?.creativeCount || (event.sourceFamily === 'CREATIVE' ? 1 : 0))
+    if (event.sourceId === 'pipiads-offline-history-20260822') historicalAdSignal = Math.max(historicalAdSignal, Number(event.metrics?.adSignal || 0))
     commerceSignal += Number(Boolean(event.metrics?.price)) + Math.min(3, Number(event.metrics?.offerCount || 0)) + Math.min(3, Number(event.metrics?.stockSignal || 0))
     evidenceSum += event.evidenceStrength
   }
@@ -47,7 +48,9 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const freshness = ageDays <= 1 ? 10 : ageDays <= 7 ? 8 : ageDays <= 30 ? 5 : 2
   const creative = clamp(creativeCount * 2, 0, 10)
   const commerce = clamp(commerceSignal * 2, 0, 10)
-  const researchHeatScore = Number(clamp(acceleration + persistence + countrySpread + freshness + creative + commerce).toFixed(2))
+  // 历史广告代理只用于决定是否值得进入“不可复用研究库”；它绝不是销量或利润，且无法帮助商品通过可复用闸门。
+  const historicalCreativeProxy = clamp(historicalAdSignal * 0.62, 0, 45)
+  const researchHeatScore = Number(clamp(acceleration + persistence + countrySpread + freshness + creative + commerce + historicalCreativeProxy).toFixed(2))
 
   const rules = loadKeywordRules(); const title = normalizeText(`${product.original_name} ${product.brand || ''} ${product.model || ''}`)
   const hasAny = (terms: string[]) => terms.some((term) => title.includes(normalizeText(term)))
@@ -62,10 +65,12 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
 
   const specs = safeJson<Record<string, unknown>>(product.specs_json, {})
   const supplier = safeJson<Record<string, unknown>>(product.supplier_json, {})
+  const sourceRiskFlags = String(specs.sourceRiskFlags || '').split('；').map((item) => item.trim()).filter(Boolean)
+  for (const flag of sourceRiskFlags) if (!riskFlags.includes(flag)) riskFlags.push(flag)
   const authorizedMedia = media.filter((item) => item.rights_status === 'AUTHORIZED')
   const rightsStatus: RightsStatus = authorizedMedia.length ? 'AUTHORIZED' : media.some((item) => item.rights_status === 'PROHIBITED') ? 'PROHIBITED' : media.length ? 'LINK_ONLY' : 'UNKNOWN'
   const identityConfirmed = Boolean(product.gtin || product.mpn || (product.brand && product.model))
-  const scopeConfirmed = isProductLike(product.original_name, rules.productTerms) || identityConfirmed || events.some((event) => event.sourceFamily === 'COMMERCE' || event.eventType === 'SAFETY')
+  const scopeConfirmed = isProductLike(product.original_name, rules.productTerms, rules.nonProductTerms) || identityConfirmed || events.some((event) => event.sourceFamily === 'COMMERCE' || event.eventType === 'SAFETY')
   const targetEu = [...countries].some((code) => ['IE', 'SE', 'DK', 'FI'].includes(code))
   const responsibleReady = !targetEu || Boolean(specs.manufacturer && specs.euResponsiblePerson && specs.warnings)
   const supplierReady = supplier.verified === true && Boolean(supplier.url || supplier.name) && Boolean(supplier.shipsTo)
@@ -109,8 +114,8 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const lifecycle = !scopeConfirmed ? 'WATCH' : daysSinceFirst <= 7 ? 'NEW' : researchHeatScore >= 80 ? 'ACCELERATING' : researchHeatScore >= 60 ? 'RISING' : researchHeatScore >= 40 ? 'COOLING' : 'WATCH'
   const trendStartAt = recent7 >= 8 && families.size >= 2 ? [...events].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime())[0]?.observedAt || null : null
   const grade = blocked ? 'BLOCKED' : reusable ? commercialScore >= 75 ? 'A' : commercialScore >= 60 ? 'B' : 'C' : 'RESEARCH_ONLY'
-  const researchReason = !scopeConfirmed ? '范围待确认：当前线索不能证明它是可上架实体商品，不进入正式库' : researchHeatScore >= 80 ? '爆发研究品：多源热度显著' : researchHeatScore >= 60 ? '上升研究品：达到不可复用研究保留门槛' : '普通热度：仅在30天待复核区观察'
-  const restrictionReason = reusable ? '已通过当前系统级复用初筛' : blocked ? riskFlags.join('；') : missingRequirements.join('；') || '尚未满足商业复用条件'
+  const researchReason = !scopeConfirmed ? '范围待确认：当前线索不能证明它是可上架实体商品，不进入正式库' : historicalAdSignal > 0 && researchHeatScore >= 60 ? '离线历史广告代理研究品：广告信号达到保留门槛；这不是销量或利润证明' : researchHeatScore >= 80 ? '爆发研究品：多源热度显著' : researchHeatScore >= 60 ? '上升研究品：达到不可复用研究保留门槛' : '普通热度：仅在30天待复核区观察'
+  const restrictionReason = reusable ? '已通过当前系统级复用初筛' : blocked ? riskFlags.join('；') : [...new Set([...missingRequirements, ...riskFlags])].join('；') || '尚未满足商业复用条件'
 
   return {
     researchHeatScore, commercialScore, completeness, confidence,

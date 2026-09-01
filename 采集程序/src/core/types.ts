@@ -44,6 +44,10 @@ export interface CollectorMetrics {
   price?: number
   currency?: string
   publicSales?: number
+  // 仅限离线历史广告研究记录：这些是广告卡片代理信号，不是销量、利润或真实订单。
+  adViews?: number
+  adDurationDays?: number
+  adSignal?: number
 }
 
 export interface MediaReference {
@@ -92,7 +96,7 @@ export interface CountryConfig {
 export interface SourceConfig {
   id: string
   family: SourceFamily
-  adapter: 'GOOGLE_TRENDS_RSS' | 'GDELT_DOC' | 'CPSC_XML' | 'ATOM_SAFETY' | 'GENERIC_RSS_SAFETY' | 'SITEMAP_SAFETY' | 'ECB_XML' | 'GENERIC_RSS' | 'JSON_LD'
+  adapter: 'GOOGLE_TRENDS_RSS' | 'GOOGLE_NEWS_RSS_WATCHLIST' | 'GDELT_DOC' | 'CPSC_XML' | 'ATOM_SAFETY' | 'GENERIC_RSS_SAFETY' | 'SITEMAP_SAFETY' | 'ECB_XML' | 'GENERIC_RSS' | 'JSON_LD'
   enabled: boolean
   endpoint?: string
   endpointTemplate?: string

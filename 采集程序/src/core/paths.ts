@@ -18,6 +18,7 @@ export const paths = {
   logs: path.join(projectRoot, '运行日志'),
   temp: path.join(projectRoot, '临时文件'),
   sourceRules: path.join(projectRoot, '来源规则', 'sources.json'),
+  productWatchlist: path.join(projectRoot, '来源规则', 'high-heat-product-watchlist.json'),
   keywordRules: path.join(projectRoot, '来源规则', 'product-keywords.json'),
   countries: path.join(projectRoot, '国家配置', 'countries.json'),
   db: path.join(projectRoot, '系统数据', '跨境热销商品雷达.db'),

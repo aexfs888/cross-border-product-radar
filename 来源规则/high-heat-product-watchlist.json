@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "note": "来自本地离线历史广告的高热实体商品观察词。Google News RSS 只补充公开研究信号；任何广告指标、文章或商家主张都不等于销量、利润、授权或合规通过。",
+  "items": [
+    {"name":"Hookless Double-Layer Shower Curtain with Removable Waterproof Snap-In Liner","query":"hookless double layer shower curtain removable snap in liner","note":"家居实体商品；品牌、材质、供应与权利待核验"},
+    {"name":"Weighted Sleep Mask - 360° Light Blocking Comfort For Deeper Sleep","query":"weighted sleep mask 360 light blocking","note":"睡眠配件；健康宣称、材质与商标待核验"},
+    {"name":"Wireless Heated Volumizing Root Lift Clip, Portable Travel Hair Styling Tool for Flat Fine Hair","query":"wireless heated volumizing root lift clip","note":"带电美发工具；电池、温控、目标国合规与供应待核验"},
+    {"name":"5-in-1 Wireless Speaker Stand","query":"5 in 1 wireless speaker stand ambient light","note":"带电音频配件；品牌、认证、插头、电池与供应待核验"},
+    {"name":"Comfort Fit Open-Ear Wireless Earphones","query":"comfort fit open ear wireless earphones","note":"带电音频产品；商标、无线认证、电池与供应待核验"},
+    {"name":"Pleated Open-Back Maxi Dress（通用商品形态）","query":"pleated open back maxi dress","note":"服装款式研究；不能据此确认 Elara 或其它品牌、设计权与供应"},
+    {"name":"Fringe Midi Dress（通用商品形态）","query":"fringe midi dress","note":"服装款式研究；不能据此确认 Noiré 或其它品牌、设计权与供应"},
+    {"name":"40 Oz Tumbler（通用商品形态）","query":"40 oz tumbler","note":"饮具研究；不能据此确认 Hydrojug 或其它品牌、食品接触材料与供应"}
+  ]
+}

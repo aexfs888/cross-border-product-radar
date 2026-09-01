@@ -33,7 +33,7 @@ const sourceSchema = z.object({
   automatic: z.array(z.object({
     id: z.string(),
     family: z.enum(['DEMAND', 'NEWS', 'COMMERCE', 'CREATIVE', 'SAFETY', 'FX']),
-    adapter: z.enum(['GOOGLE_TRENDS_RSS', 'GDELT_DOC', 'CPSC_XML', 'ATOM_SAFETY', 'GENERIC_RSS_SAFETY', 'SITEMAP_SAFETY', 'ECB_XML', 'GENERIC_RSS', 'JSON_LD']),
+    adapter: z.enum(['GOOGLE_TRENDS_RSS', 'GOOGLE_NEWS_RSS_WATCHLIST', 'GDELT_DOC', 'CPSC_XML', 'ATOM_SAFETY', 'GENERIC_RSS_SAFETY', 'SITEMAP_SAFETY', 'ECB_XML', 'GENERIC_RSS', 'JSON_LD']),
     enabled: z.boolean(),
     endpoint: z.string().optional(),
     endpointTemplate: z.string().optional(),
@@ -53,10 +53,17 @@ const sourceSchema = z.object({
 const keywordSchema = z.object({
   version: z.number(),
   productTerms: z.array(z.string()),
+  nonProductTerms: z.array(z.string()).default([]),
   ipRiskTerms: z.array(z.string()),
   regulatedTerms: z.array(z.string()),
   blockedProductTerms: z.array(z.string()),
   logisticsRiskTerms: z.array(z.string()),
+})
+
+const watchlistSchema = z.object({
+  version: z.number(),
+  note: z.string(),
+  items: z.array(z.object({ name: z.string().min(3), query: z.string().min(3), note: z.string() })),
 })
 
 function readJson(filePath: string): unknown {
@@ -74,4 +81,8 @@ export function loadSourceRules() {
 
 export function loadKeywordRules() {
   return keywordSchema.parse(readJson(paths.keywordRules))
+}
+
+export function loadProductWatchlist() {
+  return watchlistSchema.parse(readJson(paths.productWatchlist))
 }

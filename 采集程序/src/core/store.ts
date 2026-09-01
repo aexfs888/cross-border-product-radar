@@ -308,6 +308,37 @@ export class RadarStore {
     return { pruned: rows.length }
   }
 
+  removeSourceEvents(sourceId: string, reason: string): { removed: number } {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM raw_events WHERE source_id=?').get(sourceId) as { n?: number }
+    const removed = Number(row?.n || 0)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      // 外键级联会同步删除证据、国家信号和素材链接；不删除仍由其它来源支持的商品档案。
+      this.db.prepare('DELETE FROM raw_events WHERE source_id=?').run(sourceId)
+      this.db.exec('COMMIT')
+    } catch (error) { this.db.exec('ROLLBACK'); throw error }
+    this.audit('SOURCE_EVENTS_REMOVED', '已移除来源的错误或过期事件，不删除其它来源支持的商品', { sourceId, removed, reason }, 'WARN')
+    return { removed }
+  }
+
+  clearUnverifiedHistoricalCategories(sourceId: string): { cleared: number } {
+    const result = this.db.prepare(`UPDATE products SET category=NULL, updated_at=?
+      WHERE category IS NOT NULL
+        AND id IN (
+          SELECT DISTINCT pe.product_id FROM product_evidence pe
+          JOIN raw_events event ON event.id=pe.event_id
+          WHERE event.source_id=?
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM product_evidence otherEvidence
+          JOIN raw_events otherEvent ON otherEvent.id=otherEvidence.event_id
+          WHERE otherEvidence.product_id=products.id AND otherEvent.source_id<>?
+        )`).run(nowIso(), sourceId, sourceId)
+    const cleared = Number(result.changes || 0)
+    if (cleared) this.audit('UNVERIFIED_HISTORY_CATEGORY_CLEARED', '已清除仅来自离线广告记录的未核验品类', { sourceId, cleared }, 'WARN')
+    return { cleared }
+  }
+
   integrityCheck(full = false): string {
     const pragma = full ? 'integrity_check' : 'quick_check'
     const row = this.db.prepare(`PRAGMA ${pragma}`).get() as Record<string, unknown>

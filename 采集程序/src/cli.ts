@@ -5,7 +5,7 @@ import { createFullBackup } from './core/backup.js'
 import { runDoctor } from './core/doctor.js'
 import { exportReports } from './core/exporter.js'
 import { paths } from './core/paths.js'
-import { analyzeAll, collectCloud, collectLocal, initializeProject, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
+import { analyzeAll, collectCloud, collectLocal, importPipiadsHistory, initializeProject, purgeSourceEvents, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
 import { startDashboard } from './core/server.js'
 import { RadarStore } from './core/store.js'
 import { atomicWrite } from './core/utils.js'
@@ -30,6 +30,17 @@ async function main(): Promise<void> {
   }
   if (command === 'collect') {
     print(args.includes('--cloud') ? await collectCloud() : await collectLocal({ sourceId: valueAfter(args, '--source'), approvedUrl: valueAfter(args, '--approved-url'), countryCode: valueAfter(args, '--country') })); return
+  }
+  if (command === 'import-pipiads-history') {
+    const source = valueAfter(args, '--from'); if (!source) throw new Error('缺少 --from 离线历史导出 JSON 路径')
+    const imported = await importPipiadsHistory(source); const reports = await exportReports(); const backup = await createFullBackup()
+    print({ ...imported, reports, backup }); return
+  }
+  if (command === 'purge-source') {
+    const sourceId = valueAfter(args, '--source'); const reason = valueAfter(args, '--reason') || '来源事件不再满足证据关联规则'
+    if (!sourceId) throw new Error('缺少 --source 来源标识')
+    const purged = await purgeSourceEvents(sourceId, reason); const reports = await exportReports(); const backup = await createFullBackup()
+    print({ ...purged, reports, backup }); return
   }
   if (command === 'analyze') {
     const store = new RadarStore(); try { print(await analyzeAll(store)) } finally { store.close() }; return

@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { collectSource } from '../collectors/index.js'
 import { collectApprovedProductPage } from '../collectors/approved-web.js'
+import { pipiadsHistoryEvents } from '../importers/pipiads-history.js'
 import { loadSourceRules } from './config.js'
 import { buildDossier, writeDossierFile } from './dossier.js'
 import { decryptWithAge, encryptWithAge, ensureLocalKeys, verifyFile, writeManifest } from './crypto.js'
@@ -54,6 +55,30 @@ export async function collectLocal(options: { sourceId?: string, approvedUrl?: s
   } catch (error) {
     store.finishRun(runId, events.length, errors.length + 1, { fatal: error instanceof Error ? error.message : String(error) })
     throw error
+  } finally { store.close() }
+}
+
+export async function importPipiadsHistory(inputPath: string): Promise<Record<string, unknown>> {
+  const store = new RadarStore(); const runId = store.beginRun('OFFLINE_HISTORY', { inputPath }); let eventCount = 0
+  try {
+    const imported = await pipiadsHistoryEvents(inputPath, runId); eventCount = imported.events.length
+    const ingested = store.ingestEvents(imported.events); const clearedCategories = store.clearUnverifiedHistoricalCategories('pipiads-offline-history-20260822'); const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
+    const result = { ok: true, runId, selected: imported.selected, skipped: imported.skipped, sourceHash: imported.sourceHash, ingested, clearedCategories, analysis, pruned }
+    store.finishRun(runId, eventCount, 0, result); store.audit('OFFLINE_PIPIADS_HISTORY_IMPORTED', `已导入${imported.selected}条高潜力实体商品历史广告线索`, { ...result, note: '只作研究代理，不代表销量或利润；未访问 Pipiads 网页' })
+    return result
+  } catch (error) {
+    store.finishRun(runId, eventCount, 1, { fatal: error instanceof Error ? error.message : String(error) })
+    throw error
+  } finally { store.close() }
+}
+
+export async function purgeSourceEvents(sourceId: string, reason: string): Promise<Record<string, unknown>> {
+  const store = new RadarStore()
+  try {
+    const removed = store.removeSourceEvents(sourceId, reason)
+    const analysis = await analyzeAll(store)
+    const pruned = store.pruneLowHeat(30)
+    return { ok: true, sourceId, removed, analysis, pruned }
   } finally { store.close() }
 }
 

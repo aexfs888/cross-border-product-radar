@@ -3,7 +3,8 @@ import test from 'node:test'
 import { buildDossier } from '../src/core/dossier.js'
 import { analyzeProduct } from '../src/core/scoring.js'
 import { RadarStore } from '../src/core/store.js'
-import { sha256 } from '../src/core/utils.js'
+import { matchesWatchlistHeadline } from '../src/collectors/index.js'
+import { isProductLike, sha256 } from '../src/core/utils.js'
 import type { CollectorEvent, ProductHint } from '../src/core/types.js'
 
 function event(index: number, options: {
@@ -84,6 +85,36 @@ test('票务、人物、赛事和纯服务即使热度很高也不进入正式�
   store.updateAnalysis(result.product, result.analysis, buildDossier(result.product, result.analysis, result.events, result.media))
   const exported = store.exportSnapshot('NON_REUSABLE') as { products: Array<{ original_name: string }> }
   assert.deepEqual(exported.products, [])
+  store.close()
+})
+
+test('实体商品词采用整词匹配，避免把人物姓名中的 pet 等片段误判为商品', () => {
+  assert.equal(isProductLike('Pete Hegseth', ['pet']), false)
+  assert.equal(isProductLike('Weighted Sleep Mask', ['sleep mask']), true)
+  assert.equal(isProductLike('Ticketmaster', ['ticket'], ['ticketmaster']), false)
+})
+
+test('观察词新闻必须同时命中足够的商品核心词，泛品类新闻不能挂到具体商品', () => {
+  assert.equal(matchesWatchlistHeadline('The Fashion Crowd Has Spoken: Fringe Is Everywhere', 'fringe midi dress'), false)
+  assert.equal(matchesWatchlistHeadline('Best Fringe Midi Dress Styles for Summer Weddings', 'fringe midi dress'), true)
+  assert.equal(matchesWatchlistHeadline('A 40 oz tumbler is the travel accessory trend', '40 oz tumbler'), true)
+  assert.equal(matchesWatchlistHeadline('Owala’s Matcha-Green Tumbler is $28', '40 oz tumbler'), false)
+})
+
+test('离线历史广告高信号只进入不可复用研究库，并明确不是销量证明', () => {
+  const store = new RadarStore({ memory: true })
+  const historical = event(88, { name: 'Weighted Sleep Mask', family: 'CREATIVE', type: 'CREATIVE', price: 39.99 })
+  historical.sourceId = 'pipiads-offline-history-20260822'
+  historical.sourceUrl = 'local-history://pipiads/20260822/sample'
+  historical.metrics = { price: 39.99, currency: 'USD', creativeCount: 78, adViews: 781000, adDurationDays: 2, adSignal: 67.6 }
+  historical.productHint!.specs = { sourceRiskFlags: '离线历史广告 OCR 置信度为 LOW，必须独立复核' }
+  store.ingestEvents([historical])
+  const product = store.listProducts(undefined, true)[0]; const result = analyze(store, product.id)
+  assert.ok(result.analysis.researchHeatScore >= 60)
+  assert.equal(result.analysis.reuseBucket, 'NON_REUSABLE')
+  assert.equal(result.analysis.status, 'ACTIVE')
+  assert.match(result.analysis.researchReason, /^离线历史广告代理研究品：/)
+  assert.match(result.analysis.restrictionReason, /OCR 置信度/)
   store.close()
 })
 

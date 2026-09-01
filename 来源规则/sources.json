@@ -23,6 +23,16 @@
       "rights": "LINK_ONLY"
     },
     {
+      "id": "google-news-product-watchlist",
+      "family": "NEWS",
+      "adapter": "GOOGLE_NEWS_RSS_WATCHLIST",
+      "enabled": true,
+      "endpoint": "https://news.google.com/",
+      "maxRecords": 8,
+      "policy": "PUBLIC_FEED",
+      "rights": "LINK_ONLY"
+    },
+    {
       "id": "gdelt-product-news",
       "family": "NEWS",
       "adapter": "GDELT_DOC",
