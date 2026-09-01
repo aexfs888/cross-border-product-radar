@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "note": "人工通过公开网页核对的研究入口。链接仅用于研究和后续人工复核，不表示商品身份、品牌、授权、供应、销量、功效、合规或可商业复用已经确认。",
+  "items": [
+    {"originalName":"SPIDERWEB BACKPACK","label":"Vossera：SPIDERWEB BACKPACK","url":"https://vosseraofficial.com/products/spiderweb-backpack","matchStatus":"EXACT_PRODUCT_PAGE","note":"标题一致的公开商品页；页面涉及蜘蛛侠风格暗示，必须继续进行知识产权与经营主体核验。"},
+    {"originalName":"DOCTIA GumRevive Advanced Gum Care & Repair Gel &","label":"GumRevive：牙龈修复凝胶","url":"https://www.gumrevive.com/product/doctia-gumrevive-parodontitis-reparaturgel-6-emd-q7m4/","matchStatus":"TITLE_VARIANT_PAGE","note":"标题语言与措辞不同但品牌/产品名相近；医疗或功效表述及目标国监管均未核验。"},
+    {"originalName":"Hookless Double-Layer Shower Curtain with Removable Waterproof Snap-In Liner","label":"TikTok Shop：免挂钩可拆内衬浴帘集合","url":"https://shop.tiktok.com/us/k/hookless-shower-curtain-with-snap-in-liner","matchStatus":"CATEGORY_MATCH","note":"是相同商品形态的公开集合页，不是已确认的同一 SKU；不得据此确认供应商或素材权利。"},
+    {"originalName":"Spider Denim Backpack","label":"Vossera：Spider Denim Backpack","url":"https://vosseraofficial.com/products/spider-denim-backpack","matchStatus":"EXACT_PRODUCT_PAGE","note":"标题一致的公开商品页；需继续核验商标、设计与经营主体。"},
+    {"originalName":"[Professional GradejDrville Niacinamide Foaming Whitening Toothpaste 8X - Fresh Breath Stain Removal...","label":"TikTok Shop：Dr.ville 烟酰胺泡沫牙膏","url":"https://shop.tiktok.com/us/pdp/dr-ville-niacinamide-toothpaste-100ml-fresh-breath-stain-removal-gentle-cleaning/1732194455909667123","matchStatus":"TITLE_VARIANT_PAGE","note":"OCR 标题存在字符误差；公开页为同品牌近似标题。口腔护理、功效和法规必须独立核验。"},
+    {"originalName":"Noiré Fringe Midi Dress","label":"Savv The Label：Noiré Fringe Midi Dress","url":"https://savvthelabel.com/products/noire-fringe-midi-dress","matchStatus":"EXACT_PRODUCT_PAGE","note":"标题一致的公开商品页；设计、商标、供应和素材授权未确认。"},
+    {"originalName":"Time-Limited Special Comfort Fit Open-Ear Wireless Earphones","label":"Esaske：开放式无线耳机集合","url":"https://esaske.com/collections/electronics-accessories","matchStatus":"COLLECTION_LISTING","note":"集合页中出现相同标题；未确认具体 SKU、无线认证、电池和目标国合规。"},
+    {"originalName":"Ardo - Volufiline Plumping Balm Stick","label":"Ardo Beauty：Volufiline Balm Stick 集合","url":"https://shopardo.net/collections/all","matchStatus":"COLLECTION_LISTING","note":"集合页中出现相同标题；品牌、成分、功效和素材授权未确认。"},
+    {"originalName":"aked 50% OFF 5-IN-1 WIRELESS SPEAKER STAND! 仿 Induction Audio, Phone Holder & Ambient Light","label":"Cloud Cove：5 合 1 无线音箱支架","url":"https://thecloudcove.co/products/wireless-dock-stand","matchStatus":"TITLE_VARIANT_PAGE","note":"OCR 标题有促销和“仿”字样；公开页为同类近似产品，知识产权、认证和电池/充电合规必须核验。"},
+    {"originalName":"Doctor-Formulated Prostate & Nitric Oxide Chews — Restore Flow & Energy","label":"Truemed：Prostate Health & Nitric Oxide Chews","url":"https://www.truemed.com/shop/products/snap-supplements-prostate-health-and-nitric-oxide-chews","matchStatus":"TITLE_VARIANT_PAGE","note":"公开页为近似标题的膳食补充剂；不得将页面健康宣称当作验证结论，须遵守目标市场法规。"},
+    {"originalName":"Elara - Pleated Open-Back Maxi Dress","label":"Mirelle London：Elara 连衣裙","url":"https://mirelle-london.com/products/elara-pleated-open-back-maxi-dress","matchStatus":"EXACT_PRODUCT_PAGE","note":"标题一致的公开商品页；设计、商标、供应和素材授权未确认。"},
+    {"originalName":"Tortoise Hydrojug 40 Oz Tumbler","label":"HydroJug：Blonde Tortoise 40oz Traveler","url":"https://www.thehydrojug.com/products/blonde-tortoise-40oz-traveler","matchStatus":"TITLE_VARIANT_PAGE","note":"品牌、容量和图案近似；颜色命名不同，食品接触材料、商标和供货渠道仍待核验。"},
+    {"originalName":"Weighted Sleep Mask - 360° Light Blocking Comfort For Deeper Sleep","label":"Malloren：加重睡眠眼罩","url":"https://shop.app/m/rdyb13wp4x","matchStatus":"TITLE_VARIANT_PAGE","note":"集合页显示近似完整标题；未确认具体 SKU、材质、重量和健康相关表述。"},
+    {"originalName":"Cloudlight Soft Glow Diffused Blush","label":"Morphe：Cloudlight Soft Glow Diffused Blush","url":"https://www.morphe.com/products/cloudlight-soft-glow-diffused-blush","matchStatus":"EXACT_PRODUCT_PAGE","note":"标题一致的品牌公开商品页；该链接不授予图片、视频或品牌素材的商业复用权。"}
+  ]
+}

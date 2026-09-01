@@ -4,6 +4,7 @@ import path from 'node:path'
 import { collectSource } from '../collectors/index.js'
 import { collectApprovedProductPage } from '../collectors/approved-web.js'
 import { pipiadsHistoryEvents } from '../importers/pipiads-history.js'
+import { publicResearchLinkEvents } from '../importers/public-research-links.js'
 import { loadSourceRules } from './config.js'
 import { buildDossier, writeDossierFile } from './dossier.js'
 import { decryptWithAge, encryptWithAge, ensureLocalKeys, verifyFile, writeManifest } from './crypto.js'
@@ -79,6 +80,25 @@ export async function purgeSourceEvents(sourceId: string, reason: string): Promi
     const analysis = await analyzeAll(store)
     const pruned = store.pruneLowHeat(30)
     return { ok: true, sourceId, removed, analysis, pruned }
+  } finally { store.close() }
+}
+
+export async function importPublicResearchLinks(inputPath = paths.publicResearchLinks): Promise<Record<string, unknown>> {
+  const store = new RadarStore(); const runId = store.beginRun('MANUAL_PUBLIC_LINKS', { inputPath }); let eventCount = 0
+  try {
+    const imported = await publicResearchLinkEvents(inputPath, runId); eventCount = imported.events.length
+    const ingested = store.ingestEvents(imported.events); const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
+    const source = safeJson<{ note?: string, items?: Array<{ originalName?: string, label?: string, url?: string, matchStatus?: string, note?: string }> }>(await fsp.readFile(inputPath, 'utf8'), {})
+    const indexPath = path.join(paths.nonReusable, '商品公开研究链接清单.md')
+    const markdownLabel = (value: string) => value.replace(/[\\[\]]/g, (character) => `\\${character}`)
+    const rows = (source.items || []).map((item) => `- [${markdownLabel(item.originalName || '未命名商品')}｜${markdownLabel(item.label || '公开研究链接')}](${item.url || ''})  \n  匹配状态：\`${item.matchStatus || '未知'}\`；限制：${item.note || '未知'}`)
+    await atomicWrite(indexPath, `# 商品公开研究链接清单\n\n${source.note || '链接只供研究，不能替代身份、授权、供应、销量、功效或合规核验。'}\n\n${rows.join('\n\n')}\n`)
+    const result = { ok: true, runId, links: imported.events.length, sourceHash: imported.sourceHash, ingested, analysis, pruned, indexPath }
+    store.finishRun(runId, eventCount, 0, result); store.audit('PUBLIC_RESEARCH_LINKS_IMPORTED', `已写入${imported.events.length}条人工核对的公开研究链接`, { ...result, note: '链接仅作研究入口；匹配等级与限制会在报表显示，不能作为复用资格或销量证明' })
+    return result
+  } catch (error) {
+    store.finishRun(runId, eventCount, 1, { fatal: error instanceof Error ? error.message : String(error) })
+    throw error
   } finally { store.close() }
 }
 

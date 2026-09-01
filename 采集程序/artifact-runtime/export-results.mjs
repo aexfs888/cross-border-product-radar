@@ -14,7 +14,7 @@ workbook.comments.setSelf({ displayName: '跨境热销商品雷达' })
 const colors = { navy: '#15324B', blue: '#21618C', cyan: '#DDEFF7', green: '#1F7A5A', mint: '#DFF3E8', red: '#B64C4C', rose: '#F8E2E2', amber: '#C77B16', sand: '#FFF0D5', ink: '#17212B', muted: '#61717F', line: '#D8E0E6', white: '#FFFFFF', paper: '#F7F9FB' }
 const sheetNames = reusable
   ? ['使用说明', '商品总览', '国家趋势', '时间趋势', '供应与物流', '可复用素材', '授权记录', '风险检查', '证据链', '运行审计']
-  : ['使用说明', '商品研究总览', '国家趋势', '时间趋势', '不能复用原因', '风险与召回', '未授权素材链接', '待补资料与转库条件', '证据链', '运行审计']
+  : ['使用说明', '商品研究总览', '商品公开研究链接', '国家趋势', '时间趋势', '不能复用原因', '风险与召回', '未授权素材链接', '待补资料与转库条件', '证据链', '运行审计']
 const sheets = Object.fromEntries(sheetNames.map((name) => [name, workbook.worksheets.add(name)]))
 
 function colLetter(number) {
@@ -107,6 +107,19 @@ addTableSheet('时间趋势', '七个时间区间趋势证据', '覆盖 0–7、
 const evidenceRows = products.flatMap((product) => (product.events || []).map((event) => [product.id, product.zh_name || product.original_name, event.eventId, event.sourceId, event.sourceFamily, event.countryCode, event.eventType, event.sourceUrl, event.publishedAt || '未知', event.observedAt, event.evidenceStrength, event.rightsStatus, event.policyDecision, event.rawHash]))
 const evidenceSheet = addTableSheet('证据链', '完整证据链', '每条证据保留编号、原始网址、发布时间、采集时间、强度、权利与政策决定。', ['商品ID', '商品', '证据ID', '来源', '来源家族', '国家', '类型', 'URL', '发布时间', '采集时间', '证据强度', '权利', '采集政策', '原始哈希'], evidenceRows, [210, 260, 250, 170, 110, 80, 100, 420, 170, 170, 100, 110, 150, 250])
 formatDateColumns(evidenceSheet, ['I', 'J'], evidenceRows.length)
+
+if (!reusable) {
+  const publicLinkRows = products.flatMap((product) => (product.events || []).filter((event) => event.raw?.manualLink === true).map((event) => [
+    product.id, product.zh_name || product.original_name, event.raw.linkLabel || '公开研究链接', event.raw.matchStatus || '未知', event.sourceUrl,
+    event.raw.matchNote || '链接只供研究，仍需独立核验商品身份、授权、供应和合规。', event.observedAt, event.eventId,
+  ]))
+  const publicLinkSheet = addTableSheet('商品公开研究链接', '商品公开研究链接', '完整 HTTPS 地址可复制到浏览器打开；同一份可点击 Markdown 链接清单同时保存在“不可复用商品”目录。匹配状态不等于身份确认、授权、供应、销量、功效或合规通过。', ['商品ID', '商品', '链接标签', '匹配状态', '完整 HTTPS 地址（复制后打开）', '重要限制', '记录时间', '证据ID'], publicLinkRows, [210, 280, 220, 150, 460, 450, 170, 250])
+  if (publicLinkRows.length) {
+    const end = 4 + publicLinkRows.length
+    publicLinkSheet.getRange(`E5:E${end}`).format.font = { color: colors.blue, underline: true }
+    formatDateColumns(publicLinkSheet, ['G'], publicLinkRows.length)
+  }
+}
 
 const auditRows = (data.audits || []).map((item) => [item.created_at, item.type, item.severity, item.message, item.meta_json])
 const auditSheet = addTableSheet('运行审计', '运行、转库、清理与备份审计', '记录系统做过什么，不隐藏低热度清理或来源失败。', ['时间', '类型', '严重度', '说明', '细节'], auditRows, [170, 210, 90, 420, 500])

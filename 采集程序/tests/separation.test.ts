@@ -4,6 +4,8 @@ import { buildDossier } from '../src/core/dossier.js'
 import { analyzeProduct } from '../src/core/scoring.js'
 import { RadarStore } from '../src/core/store.js'
 import { matchesWatchlistHeadline } from '../src/collectors/index.js'
+import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
+import { paths } from '../src/core/paths.js'
 import { isProductLike, sha256 } from '../src/core/utils.js'
 import type { CollectorEvent, ProductHint } from '../src/core/types.js'
 
@@ -115,6 +117,18 @@ test('离线历史广告高信号只进入不可复用研究库，并明确不�
   assert.equal(result.analysis.status, 'ACTIVE')
   assert.match(result.analysis.researchReason, /^离线历史广告代理研究品：/)
   assert.match(result.analysis.restrictionReason, /OCR 置信度/)
+  store.close()
+})
+
+test('人工公开链接只作为研究入口，不会使商品获得可复用资格', async () => {
+  const imported = await publicResearchLinkEvents(paths.publicResearchLinks, 'test-links')
+  assert.equal(imported.events.length, 14)
+  assert.ok(imported.events.every((item) => item.policyDecision === 'MANUAL_LINK_ONLY' && item.rightsStatus === 'LINK_ONLY'))
+  const store = new RadarStore({ memory: true })
+  store.ingestEvents([imported.events.find((item) => item.productHint?.originalName === 'Cloudlight Soft Glow Diffused Blush')!])
+  const product = store.listProducts(undefined, true)[0]; const result = analyze(store, product.id)
+  assert.equal(result.analysis.reuseBucket, 'NON_REUSABLE')
+  assert.equal(result.analysis.status, 'STAGING')
   store.close()
 })
 

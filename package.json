@@ -19,6 +19,7 @@
     "sync": "tsx 采集程序/src/cli.ts sync",
     "prune": "tsx 采集程序/src/cli.ts prune",
     "import:pipiads-history": "tsx 采集程序/src/cli.ts import-pipiads-history",
+    "import:public-links": "tsx 采集程序/src/cli.ts import-public-links",
     "purge-source": "tsx 采集程序/src/cli.ts purge-source",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 采集程序/tests/*.test.ts",

@@ -5,7 +5,7 @@ import { createFullBackup } from './core/backup.js'
 import { runDoctor } from './core/doctor.js'
 import { exportReports } from './core/exporter.js'
 import { paths } from './core/paths.js'
-import { analyzeAll, collectCloud, collectLocal, importPipiadsHistory, initializeProject, purgeSourceEvents, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
+import { analyzeAll, collectCloud, collectLocal, importPipiadsHistory, importPublicResearchLinks, initializeProject, purgeSourceEvents, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
 import { startDashboard } from './core/server.js'
 import { RadarStore } from './core/store.js'
 import { atomicWrite } from './core/utils.js'
@@ -41,6 +41,10 @@ async function main(): Promise<void> {
     if (!sourceId) throw new Error('缺少 --source 来源标识')
     const purged = await purgeSourceEvents(sourceId, reason); const reports = await exportReports(); const backup = await createFullBackup()
     print({ ...purged, reports, backup }); return
+  }
+  if (command === 'import-public-links') {
+    const imported = await importPublicResearchLinks(valueAfter(args, '--from')); const reports = await exportReports(); const backup = await createFullBackup()
+    print({ ...imported, reports, backup }); return
   }
   if (command === 'analyze') {
     const store = new RadarStore(); try { print(await analyzeAll(store)) } finally { store.close() }; return
