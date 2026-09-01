@@ -13,8 +13,8 @@ if ($LASTEXITCODE -ne 0) {
   if ($LASTEXITCODE -ne 0) { throw '无法创建首次本地版本。请检查 Git 用户姓名和邮箱。' }
 }
 
-$remote = git remote get-url origin 2>$null
-if ($LASTEXITCODE -ne 0) {
+$remoteNames = @(git remote)
+if ($remoteNames -notcontains 'origin') {
   gh repo create cross-border-product-radar --public --source . --remote origin --push --description 'Free, evidence-first and encrypted cross-border product trend radar'
   if ($LASTEXITCODE -ne 0) { throw 'GitHub 仓库创建失败，可能已有同名仓库。' }
 } else { git push -u origin main }
@@ -27,4 +27,3 @@ $privateBase64 | gh secret set RADAR_SIGNING_PRIVATE_KEY_B64
 if ($LASTEXITCODE -ne 0) { throw 'GitHub 加密签名密钥保存失败。' }
 gh workflow run cloud-collect.yml
 Write-Host 'GitHub 免费加密采集已经连接，并已触发首次测试运行。'
-
