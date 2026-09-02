@@ -18,6 +18,7 @@ export const paths = {
   logs: path.join(projectRoot, '运行日志'),
   temp: path.join(projectRoot, '临时文件'),
   sourceRules: path.join(projectRoot, '来源规则', 'sources.json'),
+  approvedDomains: path.join(projectRoot, '来源规则', 'approved-domains.json'),
   productWatchlist: path.join(projectRoot, '来源规则', 'high-heat-product-watchlist.json'),
   approvedProductPages: path.join(projectRoot, '来源规则', 'approved-product-pages.json'),
   publicResearchLinks: path.join(projectRoot, '来源规则', 'public-research-links.json'),

@@ -7,7 +7,7 @@ import { assertPublicHttpsUrl, canonicalUrl, createId, fetchText, hostOf, nowIso
 import type { CollectorEvent } from '../core/types.js'
 
 function allowedDomains(): string[] {
-  const parsed = JSON.parse(fs.readFileSync(`${paths.root}\\来源规则\\approved-domains.json`, 'utf8'))
+  const parsed = JSON.parse(fs.readFileSync(paths.approvedDomains, 'utf8'))
   return Array.isArray(parsed.domains) ? parsed.domains.map((value: unknown) => String(value).toLowerCase()) : []
 }
 
