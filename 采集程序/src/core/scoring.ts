@@ -22,7 +22,8 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   // 公开网页研究链接只保存为跳转、核对与证据链入口。它不代表该页面
   // 已证明商品身份、真实需求、价格、供应或商业可用性，因此绝不能影响分数或闸门。
   // 注意：离线历史广告同为仅研究来源，但有独立的、允许使用的广告代理分值，不能一概排除。
-  const eligibleEvents = events.filter((event) => event.sourceId !== 'manual-public-product-links-20260901')
+  const nonScoringResearchSources = new Set(['manual-public-product-links-20260901', 'common-crawl-approved-pages'])
+  const eligibleEvents = events.filter((event) => !nonScoringResearchSources.has(event.sourceId))
   const latestCommerceByPage = new Map<string, CollectorEvent>()
   for (const event of eligibleEvents.filter((item) => item.sourceFamily === 'COMMERCE')) {
     const previous = latestCommerceByPage.get(event.sourceUrl)

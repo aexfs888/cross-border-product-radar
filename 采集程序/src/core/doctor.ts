@@ -54,7 +54,10 @@ export function runDoctor(): Record<string, unknown> {
   for (const name of planNames) checks.push(checkFilePair(name, path.join(paths.root, name), path.join(paths.backupRoot, '规划备份', name)))
   try {
     const countries = loadCountries(); const sources = loadSourceRules(); loadKeywordRules()
-    checks.push({ name: '国家与来源配置', status: countries.length === 11 && sources.network.maxRequestsPerRun === 250 ? 'PASS' : 'FAIL', detail: `${countries.length}国；单轮上限${sources.network.maxRequestsPerRun}请求` })
+    const enabled = new Set(sources.automatic.filter((item) => item.enabled).map((item) => item.id))
+    const required = ['google-trends-rss', 'google-news-product-watchlist', 'gdelt-product-news', 'approved-product-jsonld', 'common-crawl-approved-pages', 'us-cpsc-recalls', 'uk-opss-alerts', 'canada-consumer-product-recalls', 'australia-accc-recalls', 'new-zealand-product-recalls', 'eu-safety-gate-weekly', 'ecb-reference-rates']
+    const valid = countries.length === 11 && sources.network.maxRequestsPerRun === 250 && required.every((id) => enabled.has(id))
+    checks.push({ name: '国家与来源配置', status: valid ? 'PASS' : 'FAIL', detail: `${countries.length}国；${enabled.size}个自动来源；单轮上限${sources.network.maxRequestsPerRun}请求` })
   } catch (error) { checks.push({ name: '国家与来源配置', status: 'FAIL', detail: error instanceof Error ? error.message : String(error) }) }
   try {
     const binary = findAgeBinary('age'); const version = spawnSync(binary, ['--version'], { encoding: 'utf8', windowsHide: true })

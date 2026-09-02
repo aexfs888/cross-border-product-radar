@@ -33,7 +33,7 @@ const sourceSchema = z.object({
   automatic: z.array(z.object({
     id: z.string(),
     family: z.enum(['DEMAND', 'NEWS', 'COMMERCE', 'CREATIVE', 'SAFETY', 'FX']),
-    adapter: z.enum(['GOOGLE_TRENDS_RSS', 'GOOGLE_NEWS_RSS_WATCHLIST', 'GDELT_DOC', 'APPROVED_JSON_LD_WATCHLIST', 'CPSC_XML', 'ATOM_SAFETY', 'GENERIC_RSS_SAFETY', 'SITEMAP_SAFETY', 'EU_SAFETY_GATE_XML', 'ECB_XML', 'GENERIC_RSS', 'JSON_LD']),
+    adapter: z.enum(['GOOGLE_TRENDS_RSS', 'GOOGLE_NEWS_RSS_WATCHLIST', 'GDELT_DOC', 'APPROVED_JSON_LD_WATCHLIST', 'COMMON_CRAWL_INDEX', 'CPSC_XML', 'ATOM_SAFETY', 'GENERIC_RSS_SAFETY', 'SITEMAP_SAFETY', 'EU_SAFETY_GATE_XML', 'ECB_XML', 'GENERIC_RSS', 'JSON_LD']),
     enabled: z.boolean(),
     endpoint: z.string().optional(),
     endpointTemplate: z.string().optional(),

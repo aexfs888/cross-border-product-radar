@@ -3,7 +3,7 @@ import test from 'node:test'
 import { buildDossier } from '../src/core/dossier.js'
 import { analyzeProduct } from '../src/core/scoring.js'
 import { RadarStore } from '../src/core/store.js'
-import { matchesWatchlistHeadline, safetyGateDetailEvents, safetyGateReportUrls } from '../src/collectors/index.js'
+import { commonCrawlCaptureEvent, matchesWatchlistHeadline, safetyGateDetailEvents, safetyGateReportUrls } from '../src/collectors/index.js'
 import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
 import { paths } from '../src/core/paths.js'
 import { isProductLike, naturalKey, safeFetch, sha256 } from '../src/core/utils.js'
@@ -314,4 +314,24 @@ test('网络失败会保留可诊断错误代码但不泄露请求地址', async
       (error) => error instanceof Error && /ECONNRESET/.test(error.message) && !/gdeltproject/.test(error.message),
     )
   } finally { globalThis.fetch = originalFetch }
+})
+
+test('Common Crawl 只保留获准商品页的历史索引证据，不提高热度或复用资格', () => {
+  const source = loadSourceRules().automatic.find((item) => item.id === 'common-crawl-approved-pages')!
+  const item = loadApprovedProductPages().items[0]
+  const capture = commonCrawlCaptureEvent(
+    'cc-test', source, item, 'CC-MAIN-2026-34',
+    'https://index.commoncrawl.org/CC-MAIN-2026-34-index?url=example',
+    { url: item.url, timestamp: '20260812123456', status: '200', mime: 'text/html', digest: 'ABC123' },
+  )!
+  assert.equal(capture.rightsStatus, 'LINK_ONLY')
+  assert.match(String(capture.raw?.evidenceBoundary), /不下载归档网页/)
+  const store = new RadarStore({ memory: true })
+  store.ingestEvents([capture])
+  const product = store.listProducts(undefined, true)[0]
+  const result = analyze(store, product.id)
+  assert.ok(result.analysis.researchHeatScore < 10)
+  assert.equal(result.analysis.reuseBucket, 'NON_REUSABLE')
+  assert.equal(result.analysis.status, 'STAGING')
+  store.close()
 })

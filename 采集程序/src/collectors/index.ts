@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser'
 import { loadApprovedProductPages, loadCountries, loadKeywordRules, loadProductWatchlist } from '../core/config.js'
 import { collectApprovedProductPage } from './approved-web.js'
-import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, normalizeText, nowIso, parseMagnitude, sha256, sleep, textHasTerm, withRetry } from '../core/utils.js'
+import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, normalizeText, nowIso, parseMagnitude, safeFetch, sha256, sleep, textHasTerm, withRetry } from '../core/utils.js'
 import type { CollectorEvent, CountryConfig, SourceConfig } from '../core/types.js'
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', removeNSPrefix: true, trimValues: true })
@@ -130,6 +130,86 @@ async function approvedJsonLdWatchlist(runId: string): Promise<CollectorEvent[]>
   const results: CollectorEvent[] = []
   for (const item of loadApprovedProductPages().items) {
     results.push(...await collectApprovedProductPage(runId, item.url, item.countryCode, item.canonicalName))
+  }
+  return results
+}
+
+type CommonCrawlCapture = { url?: unknown, timestamp?: unknown, status?: unknown, mime?: unknown, digest?: unknown }
+
+function commonCrawlDate(value: unknown): string | undefined {
+  const match = String(value || '').match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/)
+  if (!match) return undefined
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]))).toISOString()
+}
+
+export function commonCrawlCaptureEvent(
+  runId: string,
+  source: SourceConfig,
+  item: { canonicalName: string, url: string, countryCode: string },
+  collectionId: string,
+  queryUrl: string,
+  record: CommonCrawlCapture,
+): CollectorEvent | null {
+  const publishedAt = commonCrawlDate(record.timestamp)
+  if (!publishedAt || String(record.status || '') !== '200' || !/^text\/html\b/i.test(String(record.mime || ''))) return null
+  const raw = {
+    collectionId,
+    capturedUrl: canonicalUrl(String(record.url || item.url)),
+    captureTimestamp: String(record.timestamp),
+    status: 200,
+    mime: String(record.mime),
+    digest: String(record.digest || '') || null,
+    evidenceBoundary: '只保存 Common Crawl URL 索引元数据，不下载归档网页；不能证明销量、当前库存、页面真实性或商业复用权。',
+  }
+  const base = eventBase(runId, source, queryUrl, item.countryCode, 'COMMERCE', raw)
+  return {
+    ...base,
+    publishedAt,
+    evidenceStrength: 0.45,
+    productHint: {
+      originalName: item.canonicalName,
+      identityAnchor: item.canonicalName,
+      description: `Common Crawl ${collectionId} 的公开 URL 索引显示该商品页曾于 ${publishedAt} 被抓取；仅作历史存在性线索，不读取归档正文。`,
+      productUrl: item.url,
+    },
+    metrics: {},
+    mediaRefs: [],
+  }
+}
+
+async function commonCrawlApprovedPages(runId: string, source: SourceConfig): Promise<CollectorEvent[]> {
+  const collections = JSON.parse(await withRetry(() => fetchText(String(source.endpoint)))) as Array<Record<string, unknown>>
+  const latest = collections.find((item) => /^CC-MAIN-\d{4}-\d{2}$/.test(String(item?.id || '')))
+  const collectionId = String(latest?.id || '')
+  const api = new URL(String(latest?.['cdx-api'] || ''))
+  if (!collectionId || api.protocol !== 'https:' || api.hostname !== 'index.commoncrawl.org' || api.pathname !== `/${collectionId}-index`) {
+    throw new Error('Common Crawl 最新索引清单格式不正确')
+  }
+  const results: CollectorEvent[] = []
+  for (const item of loadApprovedProductPages().items.slice(0, source.maxRecords || 3)) {
+    const query = new URL(api)
+    query.searchParams.set('url', item.url)
+    query.searchParams.set('output', 'json')
+    query.searchParams.set('filter', 'status:200')
+    query.searchParams.append('filter', 'mime:text/html')
+    query.searchParams.set('collapse', 'digest')
+    query.searchParams.set('limit', '1')
+    const body = await withRetry(async () => {
+      const response = await safeFetch(query.toString(), { headers: { Accept: 'application/x-ndjson,application/json', 'User-Agent': 'CrossBorderProductRadar/0.1 (+https://github.com/aexfs888/cross-border-product-radar)' } })
+      // The CDX API uses 404 when a URL has no capture in this crawl. That is a
+      // normal empty observation, not a source outage and must not be retried.
+      if (response.status === 404) return null
+      if (!response.ok) throw new Error(`Common Crawl 索引查询失败：HTTP ${response.status}`)
+      const text = await response.text()
+      if (Buffer.byteLength(text, 'utf8') > 1_048_576) throw new Error('Common Crawl 索引响应超过1MB限制')
+      return text
+    })
+    if (body === null) continue
+    const records = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).flatMap((line) => {
+      try { return [JSON.parse(line) as CommonCrawlCapture] } catch { return [] }
+    })
+    const event = records.length ? commonCrawlCaptureEvent(runId, source, item, collectionId, query.toString(), records[0]) : null
+    if (event) results.push(event)
   }
   return results
 }
@@ -303,6 +383,7 @@ export async function collectSource(runId: string, source: SourceConfig, countri
     case 'GOOGLE_NEWS_RSS_WATCHLIST': return googleNewsWatchlist(runId, source)
     case 'GDELT_DOC': return gdelt(runId, source)
     case 'APPROVED_JSON_LD_WATCHLIST': return approvedJsonLdWatchlist(runId)
+    case 'COMMON_CRAWL_INDEX': return commonCrawlApprovedPages(runId, source)
     case 'CPSC_XML': return cpsc(runId, source)
     case 'ATOM_SAFETY': return atomSafety(runId, source)
     case 'GENERIC_RSS_SAFETY': return genericRssSafety(runId, source)
