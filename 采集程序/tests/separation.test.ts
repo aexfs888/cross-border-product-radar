@@ -6,7 +6,7 @@ import { RadarStore } from '../src/core/store.js'
 import { matchesWatchlistHeadline, safetyGateDetailEvents, safetyGateReportUrls } from '../src/collectors/index.js'
 import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
 import { paths } from '../src/core/paths.js'
-import { isProductLike, naturalKey, sha256 } from '../src/core/utils.js'
+import { isProductLike, naturalKey, safeFetch, sha256 } from '../src/core/utils.js'
 import { cloudSourceDecision, recordCloudSourceResult, type CloudSourceHealth } from '../src/core/cloud-source-health.js'
 import { loadApprovedProductPages, loadSourceRules } from '../src/core/config.js'
 import type { CollectorEvent, ProductHint } from '../src/core/types.js'
@@ -299,4 +299,19 @@ test('欧盟 Safety Gate 官方周报索引和详情可转换为事实型安全�
   assert.equal(records[0].productHint?.gtin, '12345678')
   assert.match(String(records[0].raw?.riskLevel), /Chemical/)
   assert.equal(records[0].rightsStatus, 'LINK_ONLY')
+})
+
+test('网络失败会保留可诊断错误代码但不泄露请求地址', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => {
+    const error = new TypeError('fetch failed') as TypeError & { cause?: { code: string } }
+    error.cause = { code: 'ECONNRESET' }
+    throw error
+  }
+  try {
+    await assert.rejects(
+      safeFetch('https://api.gdeltproject.org/api/v2/doc/doc?query=test'),
+      (error) => error instanceof Error && /ECONNRESET/.test(error.message) && !/gdeltproject/.test(error.message),
+    )
+  } finally { globalThis.fetch = originalFetch }
 })

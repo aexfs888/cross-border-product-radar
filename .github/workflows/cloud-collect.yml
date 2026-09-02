@@ -30,6 +30,8 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
+      - name: Verify collector types and separation rules
+        run: npm run typecheck && npm test
       - name: Install checksum-locked age 1.3.1
         shell: bash
         run: |
@@ -84,7 +86,9 @@ jobs:
         run: |
           set -euo pipefail
           mirror="$RUNNER_TEMP/encrypted-radar-mirror"
+          previous_tip=""
           if git ls-remote --exit-code --heads origin encrypted-radar-packages >/dev/null 2>&1; then
+            previous_tip="$(git ls-remote --heads origin encrypted-radar-packages | cut -f1)"
             git fetch --depth=1 origin encrypted-radar-packages
             git worktree add --detach "$mirror" FETCH_HEAD
             git -C "$mirror" switch -c encrypted-radar-packages
@@ -100,6 +104,13 @@ jobs:
           git -C "$mirror" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "$mirror" add --all
           if ! git -C "$mirror" diff --cached --quiet; then
-            git -C "$mirror" commit -m "Publish encrypted package $GITHUB_RUN_ID"
-            git -C "$mirror" push origin HEAD:encrypted-radar-packages
+            # The mirror is a 14-day transport snapshot, not a permanent backup.
+            # Create a parentless commit so encrypted binary history cannot grow forever.
+            tree="$(git -C "$mirror" write-tree)"
+            snapshot="$(printf 'Publish encrypted package %s\n' "$GITHUB_RUN_ID" | git -C "$mirror" commit-tree "$tree")"
+            if [ -n "$previous_tip" ]; then
+              git -C "$mirror" push --force-with-lease="refs/heads/encrypted-radar-packages:$previous_tip" origin "$snapshot:refs/heads/encrypted-radar-packages"
+            else
+              git -C "$mirror" push origin "$snapshot:refs/heads/encrypted-radar-packages"
+            fi
           fi

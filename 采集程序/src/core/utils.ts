@@ -146,6 +146,10 @@ export async function safeFetch(value: string, init: RequestInit = {}): Promise<
           ...(init.headers || {}),
         },
       })
+    } catch (error) {
+      const cause = error instanceof Error ? (error as Error & { cause?: { code?: unknown, name?: unknown } }).cause : undefined
+      const reason = controller.signal.aborted ? 'TIMEOUT' : String(cause?.code || cause?.name || (error instanceof Error ? error.name : 'UNKNOWN')).slice(0, 80)
+      throw new Error(`网络请求失败（${reason}）`)
     } finally { clearTimeout(timer) }
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location')

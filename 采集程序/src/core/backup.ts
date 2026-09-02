@@ -9,6 +9,21 @@ type SnapshotEntry = { relativePath: string, objectHash: string, bytes: number, 
 
 function stamp(date = new Date()): string { return date.toISOString().replace(/[:.]/g, '-') }
 
+function taipeiPeriodTags(date = new Date()): { day: string, week: string, month: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date)
+  const value = (type: string) => parts.find((item) => item.type === type)?.value || '00'
+  const day = `${value('year')}-${value('month')}-${value('day')}`
+  const localDate = new Date(`${day}T00:00:00Z`)
+  const weekday = localDate.getUTCDay() || 7
+  localDate.setUTCDate(localDate.getUTCDate() + 4 - weekday)
+  const weekYear = localDate.getUTCFullYear()
+  const first = new Date(Date.UTC(weekYear, 0, 1))
+  const weekNumber = Math.ceil((((localDate.getTime() - first.getTime()) / 86_400_000) + 1) / 7)
+  return { day, week: `${weekYear}-W${String(weekNumber).padStart(2, '0')}`, month: day.slice(0, 7) }
+}
+
 async function filesUnder(directory: string): Promise<string[]> {
   if (!fs.existsSync(directory)) return []
   const result: string[] = []
@@ -33,25 +48,20 @@ async function incrementalSnapshot(sourceDirectory: string, targetDirectory: str
     const stats = await fsp.stat(sourceFile)
     entries.push({ relativePath: path.relative(sourceDirectory, sourceFile), objectHash: hash, bytes: stats.size, modifiedAt: stats.mtime.toISOString() })
   }
-  const now = new Date(); const createdAt = nowIso(); const dailyFile = path.join(versionRoot, `daily-${stamp(now)}.json`)
+  const now = new Date(); const createdAt = nowIso(); const tags = taipeiPeriodTags(now); const dailyFile = path.join(versionRoot, `daily-${tags.day}.json`)
   const manifest = { schemaVersion: 1, kind, sourceDirectory, createdAt, strategy: 'content-addressed-incremental-no-delete-propagation', entries }
   await atomicWrite(dailyFile, `${JSON.stringify(manifest, null, 2)}\n`)
   const additional: string[] = []
-  const weekTag = `${now.getUTCFullYear()}-W${String(isoWeek(now)).padStart(2, '0')}`
-  const weekly = path.join(versionRoot, `weekly-${weekTag}.json`)
-  if (!fs.existsSync(weekly)) { await atomicWrite(weekly, `${JSON.stringify(manifest, null, 2)}\n`); additional.push(weekly) }
-  const monthTag = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
-  const monthly = path.join(versionRoot, `monthly-${monthTag}.json`)
-  if (!fs.existsSync(monthly)) { await atomicWrite(monthly, `${JSON.stringify(manifest, null, 2)}\n`); additional.push(monthly) }
-  await keepNewest(versionRoot, /^daily-.*\.json$/, 7); await keepNewest(versionRoot, /^weekly-.*\.json$/, 5); await keepNewest(versionRoot, /^monthly-.*\.json$/, 6)
+  const weekly = path.join(versionRoot, `weekly-${tags.week}.json`)
+  await atomicWrite(weekly, `${JSON.stringify(manifest, null, 2)}\n`); additional.push(weekly)
+  const monthly = path.join(versionRoot, `monthly-${tags.month}.json`)
+  await atomicWrite(monthly, `${JSON.stringify(manifest, null, 2)}\n`); additional.push(monthly)
+  // New canonical names retain calendar periods. Legacy timestamp manifests are
+  // intentionally left untouched so this migration cannot destroy old backups.
+  await keepNewest(versionRoot, /^daily-\d{4}-\d{2}-\d{2}\.json$/, 7)
+  await keepNewest(versionRoot, /^weekly-\d{4}-W\d{2}\.json$/, 5)
+  await keepNewest(versionRoot, /^monthly-\d{4}-\d{2}\.json$/, 6)
   return { files: entries.length, dailyManifest: dailyFile, additionalManifests: additional }
-}
-
-function isoWeek(date: Date): number {
-  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-  const day = copy.getUTCDay() || 7; copy.setUTCDate(copy.getUTCDate() + 4 - day)
-  const first = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1))
-  return Math.ceil((((copy.getTime() - first.getTime()) / 86_400_000) + 1) / 7)
 }
 
 async function keepNewest(directory: string, pattern: RegExp, keep: number): Promise<void> {
@@ -60,18 +70,34 @@ async function keepNewest(directory: string, pattern: RegExp, keep: number): Pro
 }
 
 async function backupRecoveryKeys(): Promise<Record<string, unknown>> {
-  const target = path.join(paths.backupRoot, '密钥恢复包', stamp())
-  await fsp.mkdir(target, { recursive: true })
   const names = ['age-identity.txt', 'age-recipient.txt', 'signing-private.pem', 'signing-public.pem', 'hmac-secret.txt']
   const hashes: Record<string, string> = {}
   for (const name of names) {
     const source = path.join(paths.keys, name)
-    if (!fs.existsSync(source)) continue
-    const destination = path.join(target, name); await fsp.copyFile(source, destination); hashes[name] = sha256(await fsp.readFile(destination))
+    if (!fs.existsSync(source)) throw new Error(`密钥恢复包缺少必要文件：${name}`)
+    hashes[name] = sha256(await fsp.readFile(source))
   }
-  await atomicWrite(path.join(target, '恢复说明.txt'), '这是跨境热销商品雷达的离线恢复密钥包。请勿上传、分享或提交到 GitHub。恢复时将这些文件放回 E:\\跨境热销商品\\系统数据\\keys。\n')
-  await atomicWrite(path.join(target, 'SHA256.json'), `${JSON.stringify(hashes, null, 2)}\n`)
-  return { target, files: Object.keys(hashes).length }
+  const keyRoot = path.join(paths.backupRoot, '密钥恢复包')
+  const fingerprint = sha256(Buffer.from(names.map((name) => `${name}:${hashes[name]}`).join('\n'))).slice(0, 20)
+  const target = path.join(keyRoot, `keyset-${fingerprint}`)
+  if (fs.existsSync(target)) {
+    for (const name of names) {
+      const stored = path.join(target, name)
+      if (!fs.existsSync(stored) || sha256(await fsp.readFile(stored)) !== hashes[name]) throw new Error('现有密钥恢复包校验失败，拒绝覆盖')
+    }
+    return { target, files: names.length, reused: true, fingerprint }
+  }
+  const staging = path.join(keyRoot, `.staging-${process.pid}-${Date.now()}`)
+  await fsp.mkdir(staging, { recursive: true })
+  try {
+    for (const name of names) await fsp.copyFile(path.join(paths.keys, name), path.join(staging, name))
+    await atomicWrite(path.join(staging, '恢复说明.txt'), '这是跨境热销商品雷达的离线恢复密钥包。请勿上传、分享或提交到 GitHub。恢复时将这些文件放回 E:\\跨境热销商品\\系统数据\\keys。\n')
+    await atomicWrite(path.join(staging, 'SHA256.json'), `${JSON.stringify(hashes, null, 2)}\n`)
+    await fsp.rename(staging, target)
+  } finally {
+    if (fs.existsSync(staging)) await fsp.rm(staging, { recursive: true, force: true })
+  }
+  return { target, files: names.length, reused: false, fingerprint }
 }
 
 export async function createFullBackup(): Promise<Record<string, unknown>> {

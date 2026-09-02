@@ -7,6 +7,27 @@ import type { CollectorEvent, ProductAnalysis, ProductRecord, ReuseBucket } from
 
 function sqlString(value: string): string { return value.replaceAll("'", "''") }
 
+function taipeiBackupTags(date = new Date()): { day: string, week: string, month: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date)
+  const value = (type: string) => parts.find((item) => item.type === type)?.value || '00'
+  const day = `${value('year')}-${value('month')}-${value('day')}`
+  const localDate = new Date(`${day}T00:00:00Z`)
+  const weekday = localDate.getUTCDay() || 7
+  localDate.setUTCDate(localDate.getUTCDate() + 4 - weekday)
+  const weekYear = localDate.getUTCFullYear()
+  const first = new Date(Date.UTC(weekYear, 0, 1))
+  const weekNumber = Math.ceil((((localDate.getTime() - first.getTime()) / 86_400_000) + 1) / 7)
+  return { day, week: `${weekYear}-W${String(weekNumber).padStart(2, '0')}`, month: day.slice(0, 7) }
+}
+
+function copyFileAtomic(source: string, target: string): void {
+  const temporary = `${target}.${process.pid}.${Date.now()}.tmp`
+  fs.copyFileSync(source, temporary)
+  fs.renameSync(temporary, target)
+}
+
 export class RadarStore {
   readonly db: DatabaseSync
   readonly dbPath: string
@@ -402,16 +423,22 @@ export class RadarStore {
     const backupDir = path.join(paths.backupRoot, '数据库备份')
     fs.mkdirSync(backupDir, { recursive: true })
     this.db.exec('PRAGMA wal_checkpoint(FULL)')
-    const now = new Date(); const stamp = now.toISOString().replace(/[:.]/g, '-')
-    const daily = path.join(backupDir, `daily-${stamp}.db`)
-    this.db.exec(`VACUUM INTO '${sqlString(daily)}'`)
-    const result: { daily: string, weekly?: string, monthly?: string } = { daily }
-    const day = now.getUTCDay()
-    if (day === 1) { const weekly = path.join(backupDir, `weekly-${stamp}.db`); fs.copyFileSync(daily, weekly); result.weekly = weekly }
-    if (now.getUTCDate() === 1) { const monthly = path.join(backupDir, `monthly-${stamp}.db`); fs.copyFileSync(daily, monthly); result.monthly = monthly }
-    this.pruneBackupSet(backupDir, /^daily-.*\.db$/, 7)
-    this.pruneBackupSet(backupDir, /^weekly-.*\.db$/, 5)
-    this.pruneBackupSet(backupDir, /^monthly-.*\.db$/, 6)
+    const now = new Date(); const tags = taipeiBackupTags(now)
+    const daily = path.join(backupDir, `daily-${tags.day}.db`)
+    const staging = `${daily}.${process.pid}.${Date.now()}.tmp`
+    try {
+      this.db.exec(`VACUUM INTO '${sqlString(staging)}'`)
+      fs.renameSync(staging, daily)
+    } finally { if (fs.existsSync(staging)) fs.rmSync(staging, { force: true }) }
+    const weekly = path.join(backupDir, `weekly-${tags.week}.db`)
+    const monthly = path.join(backupDir, `monthly-${tags.month}.db`)
+    copyFileAtomic(daily, weekly); copyFileAtomic(daily, monthly)
+    const result: { daily: string, weekly?: string, monthly?: string } = { daily, weekly, monthly }
+    // Only canonical calendar snapshots are pruned. Older timestamp backups are
+    // preserved as legacy recovery points during this non-destructive migration.
+    this.pruneBackupSet(backupDir, /^daily-\d{4}-\d{2}-\d{2}\.db$/, 7)
+    this.pruneBackupSet(backupDir, /^weekly-\d{4}-W\d{2}\.db$/, 5)
+    this.pruneBackupSet(backupDir, /^monthly-\d{4}-\d{2}\.db$/, 6)
     this.audit('BACKUP_CREATED', '已创建版本化数据库备份', result)
     return result
   }

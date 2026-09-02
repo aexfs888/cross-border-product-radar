@@ -139,6 +139,7 @@ try {
 if ($pending.Count -eq 0) { Write-Host '没有新的加密采集包；来源健康状态已检查。'; exit 0 }
 
 New-Item -ItemType Directory -Force -Path $inbox | Out-Null
+$highestCompletedRunId = $lastRun
 foreach ($run in $pending) {
   $runId = [long]$run.githubRunId
   if ($null -eq $run.files -or @($run.files).Count -ne 3) { throw "加密镜像运行 $runId 的文件清单不完整。" }
@@ -159,10 +160,7 @@ foreach ($run in $pending) {
     }
     npm run sync
     if ($LASTEXITCODE -ne 0) { throw "验签、解密或入库失败：$runId" }
-    $stateDirectory = Split-Path -Parent $stateFile; New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
-    $temporaryState = "$stateFile.$PID.tmp"
-    @{ lastRunId = $runId; syncedAt = (Get-Date).ToUniversalTime().ToString('o'); transport = 'public-encrypted-mirror' } | ConvertTo-Json | Set-Content -LiteralPath $temporaryState -Encoding UTF8
-    Move-Item -LiteralPath $temporaryState -Destination $stateFile -Force
+    $highestCompletedRunId = $runId
   } finally {
     if (Test-Path -LiteralPath $downloadDir) {
       $resolved = [System.IO.Path]::GetFullPath($downloadDir)
@@ -174,4 +172,8 @@ npm run export
 if ($LASTEXITCODE -ne 0) { throw 'Excel 报表更新失败' }
 npm run backup
 if ($LASTEXITCODE -ne 0) { throw 'H盘备份失败' }
+$stateDirectory = Split-Path -Parent $stateFile; New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
+$temporaryState = "$stateFile.$PID.tmp"
+@{ lastRunId = $highestCompletedRunId; syncedAt = (Get-Date).ToUniversalTime().ToString('o'); transport = 'public-encrypted-mirror'; reportsAndBackupCompleted = $true } | ConvertTo-Json | Set-Content -LiteralPath $temporaryState -Encoding UTF8
+Move-Item -LiteralPath $temporaryState -Destination $stateFile -Force
 Write-Host "已同步 $($pending.Count) 个加密采集包，并完成分库、报表和备份。"
