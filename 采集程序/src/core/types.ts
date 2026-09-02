@@ -8,6 +8,8 @@ export type PolicyDecision = 'ALLOW_AUTOMATED' | 'ALLOW_FEED_API' | 'MANUAL_LINK
 
 export interface ProductHint {
   originalName: string
+  /** 人工核对的同一商品锚点；只用于证据归并，不代表身份或品牌已经验证。 */
+  identityAnchor?: string
   zhName?: string
   brand?: string
   model?: string
@@ -96,7 +98,7 @@ export interface CountryConfig {
 export interface SourceConfig {
   id: string
   family: SourceFamily
-  adapter: 'GOOGLE_TRENDS_RSS' | 'GOOGLE_NEWS_RSS_WATCHLIST' | 'GDELT_DOC' | 'CPSC_XML' | 'ATOM_SAFETY' | 'GENERIC_RSS_SAFETY' | 'SITEMAP_SAFETY' | 'ECB_XML' | 'GENERIC_RSS' | 'JSON_LD'
+  adapter: 'GOOGLE_TRENDS_RSS' | 'GOOGLE_NEWS_RSS_WATCHLIST' | 'GDELT_DOC' | 'APPROVED_JSON_LD_WATCHLIST' | 'CPSC_XML' | 'ATOM_SAFETY' | 'GENERIC_RSS_SAFETY' | 'SITEMAP_SAFETY' | 'ECB_XML' | 'GENERIC_RSS' | 'JSON_LD'
   enabled: boolean
   endpoint?: string
   endpointTemplate?: string
@@ -105,6 +107,7 @@ export interface SourceConfig {
   maxRecords?: number
   timespan?: string
   lookbackDays?: number
+  minIntervalHours?: number
   policy: string
   rights: RightsStatus | 'FACTS_ONLY'
 }

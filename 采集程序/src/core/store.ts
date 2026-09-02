@@ -166,6 +166,34 @@ export class RadarStore {
     return Boolean(row?.paused_until && new Date(row.paused_until).getTime() > Date.now())
   }
 
+  importCloudSourceHealth(sources: Record<string, {
+    consecutiveFailures?: number, lastSuccessAt?: string | null, lastFailureAt?: string | null,
+    pausedUntil?: string | null, lastError?: string | null, recordsLastRun?: number,
+  }>, allowedSourceIds: Set<string>): { imported: number } {
+    const upsert = this.db.prepare(`INSERT INTO source_health(source_id,status,consecutive_failures,last_success_at,last_failure_at,paused_until,last_error,records_last_run,baseline_records,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET
+      status=excluded.status,consecutive_failures=excluded.consecutive_failures,last_success_at=excluded.last_success_at,
+      last_failure_at=excluded.last_failure_at,paused_until=excluded.paused_until,last_error=excluded.last_error,
+      records_last_run=excluded.records_last_run,updated_at=excluded.updated_at`)
+    let imported = 0; const now = nowIso()
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const [sourceId, state] of Object.entries(sources)) {
+        if (!allowedSourceIds.has(sourceId)) continue
+        const failures = Math.max(0, Math.min(100, Number(state.consecutiveFailures || 0)))
+        const paused = Boolean(state.pausedUntil && new Date(state.pausedUntil).getTime() > Date.now())
+        const status = paused ? 'PAUSED' : failures ? 'ERROR' : 'HEALTHY'
+        upsert.run(sourceId, status, failures, state.lastSuccessAt || null, state.lastFailureAt || null,
+          state.pausedUntil || null, state.lastError ? String(state.lastError).slice(0, 300) : null,
+          Math.max(0, Number(state.recordsLastRun || 0)), 0, now)
+        imported += 1
+      }
+      this.db.exec('COMMIT')
+    } catch (error) { this.db.exec('ROLLBACK'); throw error }
+    this.audit('CLOUD_SOURCE_HEALTH_IMPORTED', `已同步${imported}个云端来源健康状态`, { imported })
+    return { imported }
+  }
+
   ingestEvents(events: CollectorEvent[]): { inserted: number, products: number, safety: number, fx: number } {
     let inserted = 0; let products = 0; let safety = 0; let fx = 0
     this.db.exec('BEGIN IMMEDIATE')
@@ -203,9 +231,12 @@ export class RadarStore {
   private upsertProduct(event: CollectorEvent): string | null {
     const hint = event.productHint!
     const key = naturalKey(hint)
-    const tombstone = this.db.prepare('SELECT * FROM tombstones WHERE natural_key_hash=?').get(sha256(key)) as { deleted_at?: string } | undefined
+    const tombstone = this.db.prepare('SELECT * FROM tombstones WHERE natural_key_hash=?').get(sha256(key)) as { deleted_at?: string, reason?: string } | undefined
     const isStrongReturn = Number(event.metrics?.searchVolume || 0) >= 10_000
-    if (tombstone?.deleted_at && !isStrongReturn && Date.now() - new Date(tombstone.deleted_at).getTime() < 7 * 86_400_000) {
+    const directProductEvidence = event.sourceFamily === 'COMMERCE' || Boolean(hint.gtin || hint.mpn || (hint.brand && hint.model))
+    const tombstoneAge = tombstone?.deleted_at ? Date.now() - new Date(tombstone.deleted_at).getTime() : Number.POSITIVE_INFINITY
+    const definitiveNonProduct = tombstone?.reason?.startsWith('明确非商品')
+    if (tombstone?.deleted_at && ((definitiveNonProduct && !directProductEvidence && tombstoneAge < 30 * 86_400_000) || (!isStrongReturn && !directProductEvidence && tombstoneAge < 7 * 86_400_000))) {
       this.db.prepare('UPDATE tombstones SET last_seen_at=? WHERE natural_key_hash=?').run(event.observedAt, sha256(key))
       return null
     }
@@ -305,6 +336,25 @@ export class RadarStore {
       this.db.exec('COMMIT')
     } catch (error) { this.db.exec('ROLLBACK'); throw error }
     if (rows.length) this.audit('LOW_HEAT_NON_REUSABLE_PRUNED', `已清理${rows.length}个普通热度不可复用商品`, { days })
+    return { pruned: rows.length }
+  }
+
+  pruneDefinitiveNonProducts(): { pruned: number } {
+    const rows = this.db.prepare(`SELECT * FROM products WHERE reuse_bucket='NON_REUSABLE' AND status='STAGING'
+      AND research_reason LIKE '范围待确认：%'`).all() as unknown as ProductRecord[]
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const row of rows) {
+        this.db.prepare(`INSERT INTO tombstones(natural_key_hash,reason,first_seen_at,last_seen_at,deleted_at,last_heat_score)
+          VALUES(?,?,?,?,?,?) ON CONFLICT(natural_key_hash) DO UPDATE SET reason=excluded.reason,last_seen_at=excluded.last_seen_at,
+          deleted_at=excluded.deleted_at,last_heat_score=excluded.last_heat_score`).run(sha256(row.natural_key),
+          '明确非商品或无法证明为实体商品，已立即匿名化清理', row.first_evidence_at, row.last_seen_at, nowIso(), row.peak_heat_score)
+        this.db.prepare('DELETE FROM raw_events WHERE product_id=?').run(row.id)
+        this.db.prepare('DELETE FROM products WHERE id=?').run(row.id)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) { this.db.exec('ROLLBACK'); throw error }
+    if (rows.length) this.audit('DEFINITIVE_NON_PRODUCTS_PRUNED', `已立即清理${rows.length}个明确非商品趋势词`, { count: rows.length })
     return { pruned: rows.length }
   }
 

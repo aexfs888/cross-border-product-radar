@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
-import { loadCountries, loadKeywordRules, loadProductWatchlist } from '../core/config.js'
+import { loadApprovedProductPages, loadCountries, loadKeywordRules, loadProductWatchlist } from '../core/config.js'
+import { collectApprovedProductPage } from './approved-web.js'
 import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, normalizeText, nowIso, parseMagnitude, sha256, textHasTerm, withRetry } from '../core/utils.js'
 import type { CollectorEvent, CountryConfig, SourceConfig } from '../core/types.js'
 
@@ -97,7 +98,11 @@ function gdeltDate(value: unknown): string | undefined {
 
 async function gdelt(runId: string, source: SourceConfig): Promise<CollectorEvent[]> {
   const endpoint = new URL(String(source.endpoint))
-  endpoint.searchParams.set('query', String(source.query))
+  const watchlist = loadProductWatchlist()
+  // 广泛的“viral product”查询会返回大量与商品无关的新闻。用已达到高热保留线的
+  // 精确观察词形成一条合并查询，并在结果标题上再次做匹配，避免新闻噪声建档。
+  const watchQueries = watchlist.items.map((item) => `"${item.query.replaceAll('"', '')}"`)
+  endpoint.searchParams.set('query', watchQueries.length ? `(${watchQueries.join(' OR ')})` : String(source.query))
   endpoint.searchParams.set('mode', 'artlist')
   endpoint.searchParams.set('maxrecords', String(source.maxRecords || 75))
   endpoint.searchParams.set('timespan', String(source.timespan || '7d'))
@@ -107,15 +112,24 @@ async function gdelt(runId: string, source: SourceConfig): Promise<CollectorEven
   const parsed = JSON.parse(body); const rules = loadKeywordRules(); const results: CollectorEvent[] = []
   for (const article of asArray(parsed?.articles)) {
     const title = String(article?.title || '').trim()
-    if (!title || !isProductLike(title, rules.productTerms, rules.nonProductTerms)) continue
+    const candidate = watchlist.items.find((item) => matchesWatchlistHeadline(title, item.query))
+    if (!title || !candidate || !isProductLike(candidate.name, rules.productTerms, rules.nonProductTerms)) continue
     const url = canonicalUrl(String(article?.url || endpoint))
     const countryCode = sourceCountryMap[String(article?.sourcecountry || '')] || 'GLOBAL'
     const base = eventBase(runId, source, url, countryCode, 'NEWS', { title, url, domain: article?.domain, language: article?.language, sourcecountry: article?.sourcecountry, seendate: article?.seendate })
     results.push({
       ...base, publishedAt: gdeltDate(article?.seendate), evidenceStrength: 0.55,
-      productHint: { originalName: title, description: 'GDELT公开新闻中的商品热度线索，商品身份仍需进一步解析。', productUrl: url, imageUrl: article?.socialimage || undefined },
+      productHint: { originalName: candidate.name, description: `GDELT公开新闻标题匹配高热商品观察词：${title}。新闻只作研究信号，身份、销量、供应和授权仍需独立核验。`, productUrl: url, imageUrl: article?.socialimage || undefined },
       mediaRefs: article?.socialimage ? [{ url: String(article.socialimage), type: 'IMAGE', rightsStatus: 'LINK_ONLY' }] : [],
     })
+  }
+  return results
+}
+
+async function approvedJsonLdWatchlist(runId: string): Promise<CollectorEvent[]> {
+  const results: CollectorEvent[] = []
+  for (const item of loadApprovedProductPages().items) {
+    results.push(...await collectApprovedProductPage(runId, item.url, item.countryCode, item.canonicalName))
   }
   return results
 }
@@ -199,6 +213,7 @@ export async function collectSource(runId: string, source: SourceConfig, countri
     case 'GOOGLE_TRENDS_RSS': return googleTrends(runId, source, countries)
     case 'GOOGLE_NEWS_RSS_WATCHLIST': return googleNewsWatchlist(runId, source)
     case 'GDELT_DOC': return gdelt(runId, source)
+    case 'APPROVED_JSON_LD_WATCHLIST': return approvedJsonLdWatchlist(runId)
     case 'CPSC_XML': return cpsc(runId, source)
     case 'ATOM_SAFETY': return atomSafety(runId, source)
     case 'GENERIC_RSS_SAFETY': return genericRssSafety(runId, source)

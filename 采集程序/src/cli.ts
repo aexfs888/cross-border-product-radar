@@ -5,7 +5,7 @@ import { createFullBackup } from './core/backup.js'
 import { runDoctor } from './core/doctor.js'
 import { exportReports } from './core/exporter.js'
 import { paths } from './core/paths.js'
-import { analyzeAll, collectCloud, collectLocal, importPipiadsHistory, importPublicResearchLinks, initializeProject, purgeSourceEvents, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
+import { analyzeAll, collectCloud, collectLocal, importCloudSourceHealth, importPipiadsHistory, importPublicResearchLinks, initializeProject, purgeSourceEvents, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
 import { startDashboard } from './core/server.js'
 import { RadarStore } from './core/store.js'
 import { atomicWrite } from './core/utils.js'
@@ -46,9 +46,16 @@ async function main(): Promise<void> {
     const imported = await importPublicResearchLinks(valueAfter(args, '--from')); const reports = await exportReports(); const backup = await createFullBackup()
     print({ ...imported, reports, backup }); return
   }
+  if (command === 'import-cloud-health') {
+    const source = valueAfter(args, '--from'); if (!source) throw new Error('缺少 --from 云端来源健康 JSON 路径')
+    print(await importCloudSourceHealth(source)); return
+  }
   if (command === 'analyze') {
     const resetPeakForSourceId = valueAfter(args, '--reset-peak-for-source')
-    const store = new RadarStore(); try { print(await analyzeAll(store, { resetPeakForSourceId })) } finally { store.close() }; return
+    const store = new RadarStore(); try {
+      const analysis = await analyzeAll(store, { resetPeakForSourceId }); const nonProducts = store.pruneDefinitiveNonProducts(); const pruned = store.pruneLowHeat(30)
+      print({ analysis, nonProducts, pruned })
+    } finally { store.close() }; return
   }
   if (command === 'sync') { const result = await syncInbox() as { ok?: boolean }; print(result); if (result.ok === false) process.exitCode = 1; return }
   if (command === 'export') { const result = await exportReports() as { ok?: boolean }; print(result); if (result.ok === false) process.exitCode = 1; return }

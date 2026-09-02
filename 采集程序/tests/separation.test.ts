@@ -6,7 +6,9 @@ import { RadarStore } from '../src/core/store.js'
 import { matchesWatchlistHeadline } from '../src/collectors/index.js'
 import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
 import { paths } from '../src/core/paths.js'
-import { isProductLike, sha256 } from '../src/core/utils.js'
+import { isProductLike, naturalKey, sha256 } from '../src/core/utils.js'
+import { cloudSourceDecision, recordCloudSourceResult, type CloudSourceHealth } from '../src/core/cloud-source-health.js'
+import { loadApprovedProductPages, loadSourceRules } from '../src/core/config.js'
 import type { CollectorEvent, ProductHint } from '../src/core/types.js'
 
 function event(index: number, options: {
@@ -194,5 +196,60 @@ test('未知权利素材只保存链接元数据，不会被判定为可复用�
   assert.equal(result.analysis.reuseBucket, 'NON_REUSABLE')
   assert.equal(result.media.length, 1)
   assert.equal(result.media[0].rights_status, 'LINK_ONLY')
+  store.close()
+})
+
+test('明确非商品趋势词立即匿名化清理，不在待复核区堆积', () => {
+  const store = new RadarStore({ memory: true })
+  store.ingestEvents([event(90, { name: 'Famous Person News', searchVolume: 1_000_000 })])
+  const product = store.listProducts(undefined, true)[0]; const result = analyze(store, product.id)
+  store.updateAnalysis(result.product, result.analysis, buildDossier(result.product, result.analysis, result.events, result.media))
+  assert.equal(result.analysis.status, 'STAGING')
+  assert.deepEqual(store.pruneDefinitiveNonProducts(), { pruned: 1 })
+  assert.equal(store.listProducts(undefined, true).length, 0)
+  assert.equal((store.dashboard() as any).counts.tombstones, 1)
+  // 同一非商品即使搜索量很高，也不会在30天内反复建档。
+  store.ingestEvents([event(91, { name: 'Famous Person News', searchVolume: 2_000_000 })])
+  assert.equal(store.listProducts(undefined, true).length, 0)
+  // 若后来出现直接商品页证据，则允许重新进入核验流程。
+  store.ingestEvents([event(92, { name: 'Famous Person News', family: 'COMMERCE', price: 20 })])
+  assert.equal(store.listProducts(undefined, true).length, 1)
+  store.close()
+})
+
+test('云端来源连续失败三次熔断12小时，低频商品页每天最多运行一次', () => {
+  const health: CloudSourceHealth = { schemaVersion: 1, generatedAt: new Date(0).toISOString(), sources: {} }
+  const base = Date.parse('2026-09-02T00:00:00.000Z')
+  for (let index = 0; index < 3; index += 1) recordCloudSourceResult(health, 'gdelt-product-news', false, 0, { pauseAfter: 3, pauseHours: 12, now: base + index, error: 'fetch failed https://example.test/private' })
+  const gdelt = loadSourceRules().automatic.find((source) => source.id === 'gdelt-product-news')!
+  assert.equal(cloudSourceDecision(gdelt, health.sources['gdelt-product-news'], base + 1000).run, false)
+  assert.equal(health.sources['gdelt-product-news'].lastError?.includes('example.test'), false)
+
+  const approved = loadSourceRules().automatic.find((source) => source.id === 'approved-product-jsonld')!
+  recordCloudSourceResult(health, approved.id, true, 3, { pauseAfter: 3, pauseHours: 12, now: base })
+  assert.equal(cloudSourceDecision(approved, health.sources[approved.id], base + 23 * 3_600_000).run, false)
+  assert.equal(cloudSourceDecision(approved, health.sources[approved.id], base + 24 * 3_600_000).run, true)
+  assert.equal(loadApprovedProductPages().items.length, 3)
+})
+
+test('商品锚点稳定归并证据，店铺默认品牌或单独SKU不会误建新商品', () => {
+  const baseline = naturalKey({ originalName: 'Noiré Fringe Midi Dress' })
+  assert.equal(naturalKey({ originalName: 'Noiré Fringe Midi Dress', brand: 'My Store 5' }), baseline)
+  assert.equal(naturalKey({ originalName: 'Short Page Title', identityAnchor: 'Noiré Fringe Midi Dress', brand: 'Brand', model: 'SKU-1' }), baseline)
+})
+
+test('公开商品页可补价格和身份，但不会冒充需求趋势造成热度暴涨', () => {
+  const store = new RadarStore({ memory: true })
+  const historical = event(100, { name: 'Cloudlight Soft Glow Diffused Blush', family: 'CREATIVE', type: 'CREATIVE', price: 18.99 })
+  historical.sourceId = 'pipiads-offline-history-20260822'; historical.metrics = { price: 18.99, currency: 'USD', creativeCount: 20, adSignal: 60 }
+  store.ingestEvents([historical])
+  const first = store.listProducts(undefined, true)[0]; const baseline = analyze(store, first.id).analysis
+  const page = event(101, { name: 'Cloudlight Soft Glow Diffused Blush', family: 'COMMERCE', price: 16, hint: { identityAnchor: 'Cloudlight Soft Glow Diffused Blush', gtin: '192608268644' } })
+  page.sourceId = 'approved-jsonld-www.morphe.com'
+  store.ingestEvents([page])
+  const enriched = analyze(store, first.id).analysis
+  assert.ok(enriched.researchHeatScore - baseline.researchHeatScore <= 10)
+  assert.ok(enriched.confidence > baseline.confidence)
+  assert.equal(enriched.reuseBucket, 'NON_REUSABLE')
   store.close()
 })

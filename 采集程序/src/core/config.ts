@@ -33,7 +33,7 @@ const sourceSchema = z.object({
   automatic: z.array(z.object({
     id: z.string(),
     family: z.enum(['DEMAND', 'NEWS', 'COMMERCE', 'CREATIVE', 'SAFETY', 'FX']),
-    adapter: z.enum(['GOOGLE_TRENDS_RSS', 'GOOGLE_NEWS_RSS_WATCHLIST', 'GDELT_DOC', 'CPSC_XML', 'ATOM_SAFETY', 'GENERIC_RSS_SAFETY', 'SITEMAP_SAFETY', 'ECB_XML', 'GENERIC_RSS', 'JSON_LD']),
+    adapter: z.enum(['GOOGLE_TRENDS_RSS', 'GOOGLE_NEWS_RSS_WATCHLIST', 'GDELT_DOC', 'APPROVED_JSON_LD_WATCHLIST', 'CPSC_XML', 'ATOM_SAFETY', 'GENERIC_RSS_SAFETY', 'SITEMAP_SAFETY', 'ECB_XML', 'GENERIC_RSS', 'JSON_LD']),
     enabled: z.boolean(),
     endpoint: z.string().optional(),
     endpointTemplate: z.string().optional(),
@@ -42,6 +42,7 @@ const sourceSchema = z.object({
     maxRecords: z.number().optional(),
     timespan: z.string().optional(),
     lookbackDays: z.number().optional(),
+    minIntervalHours: z.number().positive().optional(),
     policy: z.string(),
     rights: z.enum(['AUTHORIZED', 'LINK_ONLY', 'UNKNOWN', 'PROHIBITED', 'FACTS_ONLY']),
   })),
@@ -66,6 +67,19 @@ const watchlistSchema = z.object({
   items: z.array(z.object({ name: z.string().min(3), query: z.string().min(3), note: z.string() })),
 })
 
+const approvedProductPagesSchema = z.object({
+  version: z.number(),
+  note: z.string(),
+  items: z.array(z.object({
+    canonicalName: z.string().min(3),
+    url: z.string().url(),
+    countryCode: z.string().length(2),
+    robotsCheckedAt: z.string(),
+    rights: z.literal('LINK_ONLY'),
+    note: z.string(),
+  })),
+})
+
 function readJson(filePath: string): unknown {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
 }
@@ -85,4 +99,8 @@ export function loadKeywordRules() {
 
 export function loadProductWatchlist() {
   return watchlistSchema.parse(readJson(paths.productWatchlist))
+}
+
+export function loadApprovedProductPages() {
+  return approvedProductPagesSchema.parse(readJson(paths.approvedProductPages))
 }

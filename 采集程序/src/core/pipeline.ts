@@ -8,6 +8,7 @@ import { publicResearchLinkEvents } from '../importers/public-research-links.js'
 import { loadSourceRules } from './config.js'
 import { buildDossier, writeDossierFile } from './dossier.js'
 import { decryptWithAge, encryptWithAge, ensureLocalKeys, verifyFile, writeManifest } from './crypto.js'
+import { cloudSourceDecision, loadCloudSourceHealth, recordCloudSourceResult, saveCloudSourceHealth } from './cloud-source-health.js'
 import { paths } from './paths.js'
 import { analyzeProduct } from './scoring.js'
 import { RadarStore } from './store.js'
@@ -49,10 +50,10 @@ export async function collectLocal(options: { sourceId?: string, approvedUrl?: s
         }
       }
     }
-    const ingested = store.ingestEvents(events); const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
+    const ingested = store.ingestEvents(events); const analysis = await analyzeAll(store); const nonProducts = store.pruneDefinitiveNonProducts(); const pruned = store.pruneLowHeat(30)
     const requests = requestBudgetSnapshot()
-    store.finishRun(runId, events.length, errors.length, { ingested, analysis, pruned, errors, requests })
-    return { ok: errors.length === 0, runId, events: events.length, ingested, analysis, pruned, requests, errors }
+    store.finishRun(runId, events.length, errors.length, { ingested, analysis, nonProducts, pruned, errors, requests })
+    return { ok: errors.length === 0, runId, events: events.length, ingested, analysis, nonProducts, pruned, requests, errors }
   } catch (error) {
     store.finishRun(runId, events.length, errors.length + 1, { fatal: error instanceof Error ? error.message : String(error) })
     throw error
@@ -63,8 +64,8 @@ export async function importPipiadsHistory(inputPath: string): Promise<Record<st
   const store = new RadarStore(); const runId = store.beginRun('OFFLINE_HISTORY', { inputPath }); let eventCount = 0
   try {
     const imported = await pipiadsHistoryEvents(inputPath, runId); eventCount = imported.events.length
-    const ingested = store.ingestEvents(imported.events); const clearedCategories = store.clearUnverifiedHistoricalCategories('pipiads-offline-history-20260822'); const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
-    const result = { ok: true, runId, selected: imported.selected, skipped: imported.skipped, sourceHash: imported.sourceHash, ingested, clearedCategories, analysis, pruned }
+    const ingested = store.ingestEvents(imported.events); const clearedCategories = store.clearUnverifiedHistoricalCategories('pipiads-offline-history-20260822'); const analysis = await analyzeAll(store); const nonProducts = store.pruneDefinitiveNonProducts(); const pruned = store.pruneLowHeat(30)
+    const result = { ok: true, runId, selected: imported.selected, skipped: imported.skipped, sourceHash: imported.sourceHash, ingested, clearedCategories, analysis, nonProducts, pruned }
     store.finishRun(runId, eventCount, 0, result); store.audit('OFFLINE_PIPIADS_HISTORY_IMPORTED', `已导入${imported.selected}条高潜力实体商品历史广告线索`, { ...result, note: '只作研究代理，不代表销量或利润；未访问 Pipiads 网页' })
     return result
   } catch (error) {
@@ -78,8 +79,8 @@ export async function purgeSourceEvents(sourceId: string, reason: string): Promi
   try {
     const removed = store.removeSourceEvents(sourceId, reason)
     const analysis = await analyzeAll(store)
-    const pruned = store.pruneLowHeat(30)
-    return { ok: true, sourceId, removed, analysis, pruned }
+    const nonProducts = store.pruneDefinitiveNonProducts(); const pruned = store.pruneLowHeat(30)
+    return { ok: true, sourceId, removed, analysis, nonProducts, pruned }
   } finally { store.close() }
 }
 
@@ -87,13 +88,13 @@ export async function importPublicResearchLinks(inputPath = paths.publicResearch
   const store = new RadarStore(); const runId = store.beginRun('MANUAL_PUBLIC_LINKS', { inputPath }); let eventCount = 0
   try {
     const imported = await publicResearchLinkEvents(inputPath, runId); eventCount = imported.events.length
-    const ingested = store.ingestEvents(imported.events); const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
+    const ingested = store.ingestEvents(imported.events); const analysis = await analyzeAll(store); const nonProducts = store.pruneDefinitiveNonProducts(); const pruned = store.pruneLowHeat(30)
     const source = safeJson<{ note?: string, items?: Array<{ originalName?: string, label?: string, url?: string, matchStatus?: string, note?: string }> }>(await fsp.readFile(inputPath, 'utf8'), {})
     const indexPath = path.join(paths.nonReusable, '商品公开研究链接清单.md')
     const markdownLabel = (value: string) => value.replace(/[\\[\]]/g, (character) => `\\${character}`)
     const rows = (source.items || []).map((item) => `- [${markdownLabel(item.originalName || '未命名商品')}｜${markdownLabel(item.label || '公开研究链接')}](${item.url || ''})  \n  匹配状态：\`${item.matchStatus || '未知'}\`；限制：${item.note || '未知'}`)
     await atomicWrite(indexPath, `# 商品公开研究链接清单\n\n${source.note || '链接只供研究，不能替代身份、授权、供应、销量、功效或合规核验。'}\n\n${rows.join('\n\n')}\n`)
-    const result = { ok: true, runId, links: imported.events.length, sourceHash: imported.sourceHash, ingested, analysis, pruned, indexPath }
+    const result = { ok: true, runId, links: imported.events.length, sourceHash: imported.sourceHash, ingested, analysis, nonProducts, pruned, indexPath }
     store.finishRun(runId, eventCount, 0, result); store.audit('PUBLIC_RESEARCH_LINKS_IMPORTED', `已写入${imported.events.length}条人工核对的公开研究链接`, { ...result, note: '链接仅作研究入口；匹配等级与限制会在报表显示，不能作为复用资格或销量证明' })
     return result
   } catch (error) {
@@ -102,15 +103,35 @@ export async function importPublicResearchLinks(inputPath = paths.publicResearch
   } finally { store.close() }
 }
 
+export async function importCloudSourceHealth(inputPath: string): Promise<Record<string, unknown>> {
+  const parsed = safeJson<{ schemaVersion?: number, generatedAt?: string, sources?: Record<string, Record<string, unknown>> }>(await fsp.readFile(inputPath, 'utf8'), {})
+  if (parsed.schemaVersion !== 1 || !parsed.sources || typeof parsed.sources !== 'object') throw new Error('云端来源健康状态格式无效')
+  const store = new RadarStore()
+  try {
+    const allowed = new Set(loadSourceRules().automatic.map((source) => source.id))
+    return { ok: true, generatedAt: parsed.generatedAt || null, ...store.importCloudSourceHealth(parsed.sources, allowed) }
+  } finally { store.close() }
+}
+
 export async function collectCloud(): Promise<Record<string, unknown>> {
-  const runId = createId('cloudrun'); const events: CollectorEvent[] = []; const errors: Record<string, string>[] = []
+  const runId = createId('cloudrun'); const events: CollectorEvent[] = []; const errors: Record<string, string>[] = []; const skipped: Record<string, string>[] = []
   const startedAt = Date.now(); resetRequestBudget()
-  const sources = loadSourceRules().automatic.filter((source) => source.enabled)
+  const rules = loadSourceRules(); const sources = rules.automatic.filter((source) => source.enabled)
+  const healthPath = process.env.RADAR_CLOUD_SOURCE_HEALTH_FILE || path.join(paths.temp, 'cloud-state', 'source-health.json')
+  const health = loadCloudSourceHealth(healthPath)
   for (const source of sources) {
     if (Date.now() - startedAt > 11.5 * 60_000) { errors.push({ sourceId: source.id, error: '本轮已达到11分30秒安全截止点，留出加密收尾时间' }); break }
-    try { events.push(...await collectSource(runId, source)) }
-    catch (error) { errors.push({ sourceId: source.id, error: error instanceof Error ? error.message : String(error) }) }
+    const decision = cloudSourceDecision(source, health.sources[source.id])
+    if (!decision.run) { skipped.push({ sourceId: source.id, reason: decision.reason || '本轮无需运行' }); continue }
+    try {
+      const collected = await collectSource(runId, source); events.push(...collected)
+      recordCloudSourceResult(health, source.id, true, collected.length, { pauseAfter: rules.network.pauseAfterConsecutiveFailures, pauseHours: rules.network.pauseHours })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error); errors.push({ sourceId: source.id, error: message })
+      recordCloudSourceResult(health, source.id, false, 0, { pauseAfter: rules.network.pauseAfterConsecutiveFailures, pauseHours: rules.network.pauseHours, error })
+    }
   }
+  await saveCloudSourceHealth(healthPath, health)
   const outputDir = path.join(paths.temp, 'cloud-output'); await fsp.mkdir(outputDir, { recursive: true })
   const plainPath = path.join(outputDir, `${runId}.jsonl`); const encryptedPath = `${plainPath}.age`; const manifestPath = path.join(outputDir, `${runId}.manifest.json`)
   await atomicWrite(plainPath, events.map((event) => JSON.stringify(event)).join('\n') + '\n')
@@ -118,7 +139,7 @@ export async function collectCloud(): Promise<Record<string, unknown>> {
   if (!recipient) { await fsp.rm(plainPath, { force: true }); throw new Error('缺少 AGE_RECIPIENT；云端严禁上传明文') }
   try { encryptWithAge(plainPath, encryptedPath, recipient) } finally { await fsp.rm(plainPath, { force: true }) }
   const manifest = await writeManifest(manifestPath, encryptedPath, events.length, runId)
-  return { ok: errors.length === 0, runId, events: events.length, requests: requestBudgetSnapshot(), errors, encryptedPath, manifestPath, manifest }
+  return { ok: errors.length === 0, runId, events: events.length, requests: requestBudgetSnapshot(), errors, skipped, healthPath, encryptedPath, manifestPath, manifest }
 }
 
 export async function syncInbox(): Promise<Record<string, unknown>> {
@@ -143,9 +164,9 @@ export async function syncInbox(): Promise<Record<string, unknown>> {
       } catch (error) { errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`) }
       finally { if (plainPath) await fsp.rm(plainPath, { force: true }) }
     }
-    const analysis = await analyzeAll(store); const pruned = store.pruneLowHeat(30)
-    store.audit('CLOUD_SYNC_COMPLETE', `同步${files}个加密包、${eventsCount}条事件`, { files, eventsCount, errors, analysis, pruned })
-    return { ok: errors.length === 0, files, events: eventsCount, errors, analysis, pruned }
+    const analysis = await analyzeAll(store); const nonProducts = store.pruneDefinitiveNonProducts(); const pruned = store.pruneLowHeat(30)
+    store.audit('CLOUD_SYNC_COMPLETE', `同步${files}个加密包、${eventsCount}条事件`, { files, eventsCount, errors, analysis, nonProducts, pruned })
+    return { ok: errors.length === 0, files, events: eventsCount, errors, analysis, nonProducts, pruned }
   } finally { store.close() }
 }
 

@@ -9,6 +9,13 @@
     {"name":"Comfort Fit Open-Ear Wireless Earphones","query":"comfort fit open ear wireless earphones","note":"带电音频产品；商标、无线认证、电池与供应待核验"},
     {"name":"Pleated Open-Back Maxi Dress（通用商品形态）","query":"pleated open back maxi dress","note":"服装款式研究；不能据此确认 Elara 或其它品牌、设计权与供应"},
     {"name":"Fringe Midi Dress（通用商品形态）","query":"fringe midi dress","note":"服装款式研究；不能据此确认 Noiré 或其它品牌、设计权与供应"},
-    {"name":"40 Oz Tumbler（通用商品形态）","query":"40 oz tumbler","note":"饮具研究；不能据此确认 Hydrojug 或其它品牌、食品接触材料与供应"}
+    {"name":"40 Oz Tumbler（通用商品形态）","query":"40 oz tumbler","note":"饮具研究；不能据此确认 Hydrojug 或其它品牌、食品接触材料与供应"},
+    {"name":"SPIDERWEB BACKPACK","query":"spiderweb backpack","note":"品牌和角色形象知识产权风险较高；仅保留研究新闻"},
+    {"name":"DOCTIA GumRevive Advanced Gum Care & Repair Gel &","query":"Doctia GumRevive gum care gel","note":"口腔护理功效和监管风险较高；仅保留研究新闻"},
+    {"name":"Spider Denim Backpack","query":"spider denim backpack","note":"品牌和角色形象知识产权风险较高；仅保留研究新闻"},
+    {"name":"[Professional GradejDrville Niacinamide Foaming Whitening Toothpaste 8X - Fresh Breath Stain Removal...","query":"Drville niacinamide whitening toothpaste","note":"OCR标题存在误差；口腔美白功效和监管风险较高"},
+    {"name":"Ardo - Volufiline Plumping Balm Stick","query":"Ardo Volufiline plumping balm stick","note":"美容功效、成分、商标和目标国监管待核验"},
+    {"name":"Doctor-Formulated Prostate & Nitric Oxide Chews — Restore Flow & Energy","query":"prostate nitric oxide chews","note":"膳食补充剂和功效风险较高；只作合规研究"},
+    {"name":"Cloudlight Soft Glow Diffused Blush","query":"Cloudlight soft glow diffused blush","note":"品牌美妆商品；成分、责任主体和素材授权待核验"}
   ]
 }

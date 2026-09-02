@@ -1,5 +1,9 @@
 {
   "version": 1,
-  "domains": [],
-  "note": "只有完成条款、robots.txt、频率和素材权利审核后，才把域名加入此白名单。"
+  "domains": [
+    "www.morphe.com",
+    "savvthelabel.com",
+    "mirelle-london.com"
+  ],
+  "note": "仅允许 approved-product-pages.json 中列出的精确商品页。2026-09-02 已核验 HTTPS、公开可访问、robots.txt 未禁止 /products；每个来源至少间隔24小时。素材始终为 LINK_ONLY，不获得商业复用权。"
 }

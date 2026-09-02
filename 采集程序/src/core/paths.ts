@@ -19,6 +19,7 @@ export const paths = {
   temp: path.join(projectRoot, '临时文件'),
   sourceRules: path.join(projectRoot, '来源规则', 'sources.json'),
   productWatchlist: path.join(projectRoot, '来源规则', 'high-heat-product-watchlist.json'),
+  approvedProductPages: path.join(projectRoot, '来源规则', 'approved-product-pages.json'),
   publicResearchLinks: path.join(projectRoot, '来源规则', 'public-research-links.json'),
   keywordRules: path.join(projectRoot, '来源规则', 'product-keywords.json'),
   countries: path.join(projectRoot, '国家配置', 'countries.json'),

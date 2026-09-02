@@ -19,6 +19,7 @@ jobs:
     env:
       AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
       RADAR_SIGNING_PRIVATE_KEY_B64: ${{ secrets.RADAR_SIGNING_PRIVATE_KEY_B64 }}
+      RADAR_CLOUD_SOURCE_HEALTH_FILE: ${{ github.workspace }}/临时文件/cloud-state/source-health.json
     steps:
       - name: Checkout locked source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
@@ -45,6 +46,16 @@ jobs:
           set -euo pipefail
           test -n "$AGE_RECIPIENT"
           test -n "$RADAR_SIGNING_PRIVATE_KEY_B64"
+      - name: Restore public source circuit state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$RADAR_CLOUD_SOURCE_HEALTH_FILE")"
+          if ! curl --fail --silent --show-error --location --retry 2 \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/encrypted-radar-packages/source-health.json" \
+            --output "$RADAR_CLOUD_SOURCE_HEALTH_FILE"; then
+            printf '%s\n' '{"schemaVersion":1,"generatedAt":"1970-01-01T00:00:00.000Z","sources":{}}' > "$RADAR_CLOUD_SOURCE_HEALTH_FILE"
+          fi
       - name: Collect only approved public sources and encrypt immediately
         run: npm run collect:cloud
       - name: Prove no plaintext result remains
@@ -81,8 +92,9 @@ jobs:
             git worktree add --detach "$mirror"
             git -C "$mirror" switch --orphan encrypted-radar-packages
             git -C "$mirror" rm -rf . --ignore-unmatch
-            printf '%s\n' '*' '!.gitignore' '!index.json' '!packages/' '!packages/*/' '!packages/*/*.age' '!packages/*/*.manifest.json' '!packages/*/*.manifest.json.sig' > "$mirror/.gitignore"
+            printf '%s\n' '*' '!.gitignore' '!index.json' '!source-health.json' '!packages/' '!packages/*/' '!packages/*/*.age' '!packages/*/*.manifest.json' '!packages/*/*.manifest.json.sig' > "$mirror/.gitignore"
           fi
+          printf '%s\n' '*' '!.gitignore' '!index.json' '!source-health.json' '!packages/' '!packages/*/' '!packages/*/*.age' '!packages/*/*.manifest.json' '!packages/*/*.manifest.json.sig' > "$mirror/.gitignore"
           RADAR_PUBLISH_ROOT="$mirror" node "$GITHUB_WORKSPACE/采集程序/scripts/publish-encrypted-mirror.mjs"
           git -C "$mirror" config user.name "cross-border-product-radar[bot]"
           git -C "$mirror" config user.email "41898282+github-actions[bot]@users.noreply.github.com"

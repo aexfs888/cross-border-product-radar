@@ -8,15 +8,15 @@
     "ticketmaster","sportsbook","draftkings","betmgm","betfair","odds","promo code","playoff","standings","olympics","fifa","la liga","airways","power outage","daylight savings","release date","lotto","demonstration","pregnancy"
   ],
   "ipRiskTerms": [
-    "disney","pixar","marvel","pokemon","pokémon","nike","adidas","gucci","louis vuitton","star wars","hello kitty","barbie","harry potter","nintendo","playstation","lego","minecraft","sanrio","nba","nfl","batman","superman","snoopy","fortnite","roblox","ferrari","imitation","仿"
+    "disney","pixar","marvel","pokemon","pokémon","nike","adidas","gucci","louis vuitton","star wars","hello kitty","barbie","harry potter","nintendo","playstation","lego","minecraft","sanrio","nba","nfl","batman","superman","snoopy","fortnite","roblox","ferrari","dyson","hydrojug","morphe","doctia","drville","ardo","noiré","elara","spiderweb backpack","spider denim backpack","imitation","仿"
   ],
   "regulatedTerms": [
-    "supplement","vitamin","medical","therapy","pain relief","weight loss","blood pressure","diabetes","fertility","pregnancy","baby food","laser","radio frequency","tooth whitening","toothpaste","gum care","whitening","prostate","nitric oxide","保健品","维生素","医疗","治疗","减肥","婴儿食品"
+    "supplement","vitamin","medical","therapy","pain relief","weight loss","blood pressure","diabetes","fertility","pregnancy","baby food","laser","radio frequency","tooth whitening","toothpaste","gum care","whitening","prostate","nitric oxide","plumping","volufiline","blush","cosmetic","weighted sleep mask","deeper sleep","tumbler","保健品","维生素","医疗","治疗","减肥","婴儿食品","丰唇","腮红","加重睡眠眼罩","随行杯"
   ],
   "blockedProductTerms": [
     "counterfeit","fake passport","illegal drug","weapon","ammo","explosive","盗版","假证","非法药物"
   ],
   "logisticsRiskTerms": [
-    "battery","lithium","liquid","magnet","flammable","aerosol","blade","glass","ceramic","oversize","电池","锂电","液体","磁性","易燃","喷雾","刀片","玻璃","陶瓷"
+    "battery","lithium","wireless","earphones","speaker","liquid","magnet","flammable","aerosol","blade","glass","ceramic","oversize","电池","锂电","无线","耳机","音箱","液体","磁性","易燃","喷雾","刀片","玻璃","陶瓷"
   ]
 }

@@ -45,6 +45,15 @@
       "rights": "LINK_ONLY"
     },
     {
+      "id": "approved-product-jsonld",
+      "family": "COMMERCE",
+      "adapter": "APPROVED_JSON_LD_WATCHLIST",
+      "enabled": true,
+      "minIntervalHours": 24,
+      "policy": "APPROVED_PUBLIC_PRODUCT_PAGES",
+      "rights": "LINK_ONLY"
+    },
+    {
       "id": "us-cpsc-recalls",
       "family": "SAFETY",
       "adapter": "CPSC_XML",

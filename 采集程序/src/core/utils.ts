@@ -35,8 +35,10 @@ export function normalizeText(value: string): string {
 export function normalizeTitle(value: string): string {
   return normalizeText(value).replace(/\b(the|a|an|new|202[0-9]|sale|deal|best|top)\b/g, ' ').replace(/\s+/g, ' ').trim()
 }
-export function naturalKey(hint: { originalName: string, brand?: string, model?: string, gtin?: string, mpn?: string }): string {
-  const strongest = hint.gtin || hint.mpn || [hint.brand, hint.model].filter(Boolean).join(' ')
+export function naturalKey(hint: { originalName: string, identityAnchor?: string, brand?: string, model?: string, gtin?: string, mpn?: string }): string {
+  // identityAnchor 只在人工已确认“网页与现有候选为同一研究对象”时使用，防止网页短标题、
+  // 店铺默认品牌或商家 SKU 将同一商品拆成多个档案。品牌必须和型号同时存在才构成身份键。
+  const strongest = hint.identityAnchor || hint.gtin || hint.mpn || (hint.brand && hint.model ? `${hint.brand} ${hint.model}` : '')
   return sha256(normalizeTitle(strongest || hint.originalName)).slice(0, 32)
 }
 export function canonicalUrl(value: string): string {

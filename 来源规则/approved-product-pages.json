@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "note": "已完成最低自动读取审核的精确公开商品页。结构化字段只用于身份、价格、规格与变体研究；图片和页面文字仍为 LINK_ONLY，不代表商业授权、供应商核验或可复用资格。",
+  "items": [
+    {
+      "canonicalName": "Cloudlight Soft Glow Diffused Blush",
+      "url": "https://www.morphe.com/products/cloudlight-soft-glow-diffused-blush",
+      "countryCode": "US",
+      "robotsCheckedAt": "2026-09-02",
+      "rights": "LINK_ONLY",
+      "note": "品牌公开商品页；美妆成分、目标国化妆品责任主体和素材授权仍需独立核验。"
+    },
+    {
+      "canonicalName": "Noiré Fringe Midi Dress",
+      "url": "https://savvthelabel.com/products/noire-fringe-midi-dress",
+      "countryCode": "AU",
+      "robotsCheckedAt": "2026-09-02",
+      "rights": "LINK_ONLY",
+      "note": "精确标题商品页；设计权、供货主体与素材授权仍需独立核验。"
+    },
+    {
+      "canonicalName": "Elara - Pleated Open-Back Maxi Dress",
+      "url": "https://mirelle-london.com/products/elara-pleated-open-back-maxi-dress",
+      "countryCode": "GB",
+      "robotsCheckedAt": "2026-09-02",
+      "rights": "LINK_ONLY",
+      "note": "精确标题商品页；设计权、供货主体与素材授权仍需独立核验。"
+    }
+  ]
+}

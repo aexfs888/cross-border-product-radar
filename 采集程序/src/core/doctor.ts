@@ -42,7 +42,10 @@ export function runDoctor(): Record<string, unknown> {
     const jobsFile = 'E:\\Hermes\\Agent\\cron\\jobs.json'
     const parsed = JSON.parse(fs.readFileSync(jobsFile, 'utf8')) as { jobs?: Array<Record<string, any>> }
     const job = parsed.jobs?.find((item) => item.id === '99c97b80b9eb' || item.name === '跨境热销商品雷达-本地同步')
-    const scheduled = Boolean(job?.enabled && job?.state === 'scheduled' && job?.schedule?.kind === 'interval' && Number(job?.schedule?.minutes) === 30 && job?.repeat?.times === null)
+    const interval30 = job?.schedule?.kind === 'interval' && Number(job?.schedule?.minutes) === 30
+    const cronMatch = String(job?.schedule?.expr || '').match(/^(\d{1,2}),(\d{1,2}) \* \* \* \*$/)
+    const cronTwiceHourly = job?.schedule?.kind === 'cron' && Boolean(cronMatch && Math.abs(Number(cronMatch[1]) - Number(cronMatch[2])) === 30)
+    const scheduled = Boolean(job?.enabled && job?.state === 'scheduled' && (interval30 || cronTwiceHourly) && job?.repeat?.times === null)
     const lastFailed = job?.last_status === 'error'
     checks.push({
       name: 'Hermes 30分钟同步', status: !scheduled ? 'FAIL' : lastFailed ? 'WARN' : 'PASS',

@@ -8,6 +8,7 @@ const projectRoot = path.resolve(scriptDirectory, '..', '..')
 const sourceDirectory = path.resolve(process.env.RADAR_SOURCE_DIR || path.join(projectRoot, '临时文件', 'cloud-output'))
 const publishRoot = process.env.RADAR_PUBLISH_ROOT ? path.resolve(process.env.RADAR_PUBLISH_ROOT) : ''
 const githubRunId = String(process.env.GITHUB_RUN_ID || '').trim()
+const sourceHealthFile = process.env.RADAR_CLOUD_SOURCE_HEALTH_FILE ? path.resolve(process.env.RADAR_CLOUD_SOURCE_HEALTH_FILE) : ''
 const retentionDays = 14
 
 function fail(message) {
@@ -46,6 +47,23 @@ async function writeAtomic(file, content) {
   const temp = `${file}.tmp-${process.pid}`
   await fs.writeFile(temp, content, 'utf8')
   await fs.rename(temp, file)
+}
+
+function publicSourceHealth(value) {
+  if (!value || value.schemaVersion !== 1 || !value.sources || typeof value.sources !== 'object' || Array.isArray(value.sources)) fail('来源健康状态格式不正确')
+  const sources = {}
+  for (const [id, state] of Object.entries(value.sources)) {
+    if (!/^[a-z0-9][a-z0-9-]{1,80}$/.test(id) || !state || typeof state !== 'object') fail('来源健康状态含有非法来源')
+    sources[id] = {
+      consecutiveFailures: Math.max(0, Math.min(100, Number(state.consecutiveFailures || 0))),
+      lastSuccessAt: state.lastSuccessAt ? String(state.lastSuccessAt) : null,
+      lastFailureAt: state.lastFailureAt ? String(state.lastFailureAt) : null,
+      pausedUntil: state.pausedUntil ? String(state.pausedUntil) : null,
+      lastError: state.lastError ? String(state.lastError).replace(/https?:\/\/\S+/gi, '[URL]').slice(0, 300) : null,
+      recordsLastRun: Math.max(0, Number(state.recordsLastRun || 0)),
+    }
+  }
+  return { schemaVersion: 1, generatedAt: String(value.generatedAt || new Date().toISOString()), sources }
 }
 
 if (!publishRoot) fail('未提供 RADAR_PUBLISH_ROOT')
@@ -104,4 +122,7 @@ const index = {
   packages: retained,
 }
 await writeAtomic(indexFile, `${JSON.stringify(index, null, 2)}\n`)
+if (!sourceHealthFile) fail('未提供来源健康状态文件')
+const health = publicSourceHealth(await readJson(sourceHealthFile, null))
+await writeAtomic(path.join(publishRoot, 'source-health.json'), `${JSON.stringify(health, null, 2)}\n`)
 console.log(`已发布加密镜像：运行 ${githubRunId}，文件 ${files.length} 个；未发布任何明文商品数据。`)
