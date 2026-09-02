@@ -45,6 +45,19 @@ function Invoke-GitHubApiFallback([string]$Uri, [string]$Destination = '') {
 }
 
 function Invoke-RadarRequest([string]$Uri, [string]$Destination = '') {
+  $apiFailure = $null
+  try {
+    $parsed = [Uri]$Uri
+    if ($parsed.Scheme -eq 'https' -and $parsed.Host -eq 'raw.githubusercontent.com' -and (Get-Command gh -ErrorAction SilentlyContinue)) {
+      # Contents API is preferred because raw CDN responses can briefly serve a
+      # stale index immediately after the mirror branch is updated.
+      return Invoke-GitHubApiFallback -Uri $Uri -Destination $Destination
+    }
+  } catch {
+    # Files over the Contents API limit or a temporary API failure still get a
+    # chance through the public raw endpoint below.
+    $apiFailure = $_
+  }
   $lastFailure = $null
   for ($attempt = 1; $attempt -le 3; $attempt++) {
     try {
@@ -62,13 +75,8 @@ function Invoke-RadarRequest([string]$Uri, [string]$Destination = '') {
       if ($attempt -lt 3) { Start-Sleep -Seconds (2 * $attempt) }
     }
   }
-  # Some Windows networks terminate TLS specifically for raw.githubusercontent.com.
-  # gh uses GitHub's official Contents API and preserves binary encrypted packages.
-  try {
-    return Invoke-GitHubApiFallback -Uri $Uri -Destination $Destination
-  } catch {
-    throw "直接下载失败（$($lastFailure.Exception.Message)）；$($_.Exception.Message)"
-  }
+  $apiDetail = if ($apiFailure) { "；GitHub API：$($apiFailure.Exception.Message)" } else { '' }
+  throw "直接下载失败（$($lastFailure.Exception.Message)）$apiDetail"
 }
 
 Set-Location -LiteralPath $projectRoot
