@@ -3,7 +3,7 @@ import { load } from 'cheerio'
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
 import { paths } from '../core/paths.js'
-import { assertPublicHttpsUrl, canonicalUrl, createId, fetchText, hostOf, nowIso, sha256 } from '../core/utils.js'
+import { assertPublicHttpsUrl, canonicalUrl, createId, credibleProductDescription, fetchText, hostOf, nowIso, sha256 } from '../core/utils.js'
 import type { CollectorEvent } from '../core/types.js'
 
 function allowedDomains(): string[] {
@@ -36,6 +36,17 @@ function textValue(value: unknown): string | undefined {
 }
 
 function itemList(value: unknown): any[] { return Array.isArray(value) ? value : value ? [value] : [] }
+
+function usefulDescription(candidates: unknown[], productName: string, brand: string): string | undefined {
+  for (const candidate of candidates) {
+    const value = credibleProductDescription(candidate, productName, brand)
+    // Readability sometimes selects a price/promotion block or only the store
+    // name.  Those strings must not become "what it is".
+    if (!value) continue
+    return value
+  }
+  return undefined
+}
 
 function structuredSpecs(product: Record<string, any>, offer: Record<string, any>): Record<string, string | number | boolean> {
   const result: Record<string, string | number | boolean> = {}
@@ -70,6 +81,14 @@ export async function collectApprovedProductPage(
   if (!product?.name) return []
   let readable = ''
   try { readable = new Readability(new JSDOM(html, { url: url.toString() }).window.document).parse()?.textContent?.trim() || '' } catch { /* JSON-LD 仍可用 */ }
+  const $ = load(html)
+  const rawBrandForDescription = typeof product.brand === 'object' ? textValue(product.brand.name) : textValue(product.brand)
+  const description = usefulDescription([
+    product.description,
+    $('meta[property="og:description"]').attr('content'),
+    $('meta[name="description"]').attr('content'),
+    readable,
+  ], String(product.name), rawBrandForDescription || '')
   const offers = itemList(product.offers).find((item) => item && typeof item === 'object') as Record<string, any> | undefined || {}
   const image = itemList(product.image).map((item) => typeof item === 'object' ? item?.url || item?.contentUrl : item).find(Boolean)
   const sourceUrl = canonicalUrl(url.toString())
@@ -79,7 +98,7 @@ export async function collectApprovedProductPage(
   const specs = structuredSpecs(product, offers)
   const raw = {
     jsonLd: product,
-    readableExcerpt: readable.slice(0, 1500),
+    readableExcerpt: description || null,
     canonicalName: canonicalName || null,
     extractionBoundary: '公开商品页 JSON-LD；页面主张不等于独立核验，素材仅保留链接',
   }
@@ -95,7 +114,7 @@ export async function collectApprovedProductPage(
       brand,
       // 商家内部 SKU 不是制造商型号。只有页面明确给出 model 才能满足型号闸门。
       model: textValue(product.model), gtin: textValue(product.gtin13 || product.gtin12 || product.gtin), mpn: textValue(product.mpn),
-      category: textValue(product.category), description: textValue(product.description) || readable.slice(0, 600), productUrl: sourceUrl,
+      category: textValue(product.category), description, productUrl: sourceUrl,
       imageUrl: image ? String(image) : undefined, variants, specs,
       features: [], supplier: { name: hostOf(sourceUrl), url: sourceUrl, verified: false },
     },

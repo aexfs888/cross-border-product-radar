@@ -92,17 +92,17 @@ if (products.length) {
 const countryRows = []
 for (const product of products) for (const [code, block] of Object.entries(product.dossier?.countryPerformance || {})) countryRows.push([
   product.id, product.zh_name || product.original_name, code, block.countryName?.value || code, block.evidenceCount?.state || '未知', block.evidenceCount?.value ?? 0,
-  block.latestEvidenceAt?.value || '未知', safeText(block.search?.value), safeText(block.news?.value), safeText(block.ads?.value), safeText(block.offers?.value), safeText(block.reviews?.value), safeText(block.publicSales?.value),
+  block.observedEvidenceCount?.value ?? 0, block.latestEvidenceAt?.value || '未知', safeText(block.search?.value), safeText(block.news?.value), safeText(block.ads?.value), safeText(block.offers?.value), safeText(block.reviews?.value), safeText(block.publicSales?.value),
 ])
-const countrySheet = addTableSheet('国家趋势', '11个目标国家分别表现', '零证据只表示当前获准来源未发现，不代表该国市场绝对没有需求。', ['商品ID', '商品', '国家代码', '国家', '字段状态', '证据数', '最近证据', '搜索', '新闻', '广告', '报价', '评价', '公开销量'], countryRows, [210, 280, 90, 100, 100, 80, 170, 280, 300, 220, 220, 220, 220])
-formatDateColumns(countrySheet, ['G'], countryRows.length)
+const countrySheet = addTableSheet('国家趋势', '11个目标国家分别表现', '独立公开地址按 URL 去重；采集观察用于新鲜度，二者都不代表销量。零证据只表示当前获准来源未发现。', ['商品ID', '商品', '国家代码', '国家', '字段状态', '独立公开地址', '采集观察', '最近证据', '搜索', '新闻', '广告', '报价', '评价', '公开销量'], countryRows, [210, 280, 90, 100, 100, 100, 90, 170, 280, 300, 220, 220, 220, 220])
+formatDateColumns(countrySheet, ['H'], countryRows.length)
 
 const timeRows = []
 for (const product of products) for (const [windowName, block] of Object.entries(product.dossier?.chronology?.timeWindows || {})) timeRows.push([
-  product.id, product.zh_name || product.original_name, windowName, block.observedEvidenceCount?.state || '未知', block.observedEvidenceCount?.value ?? 0,
+  product.id, product.zh_name || product.original_name, windowName, block.independentSourceCount?.state || '未知', block.independentSourceCount?.value ?? 0, block.observedEvidenceCount?.value ?? 0,
   safeText(block.sourceFamilies?.value), safeText(block.countries?.value), safeText(block.searchSignals?.value), safeText(block.publicSalesSignals?.value),
 ])
-addTableSheet('时间趋势', '七个时间区间趋势证据', '覆盖 0–7、8–15、16–30、31–60、61–90、91–120、121–180 天；不把缺失证据填成销量。', ['商品ID', '商品', '时间区间', '字段状态', '证据数', '来源家族', '国家', '搜索信号', '公开销量信号'], timeRows, [210, 280, 160, 100, 80, 180, 160, 360, 360])
+addTableSheet('时间趋势', '七个时间区间趋势证据', '覆盖 0–7、8–15、16–30、31–60、61–90、91–120、121–180 天；独立公开地址按 URL 去重，不把重复观察或缺失证据填成销量。', ['商品ID', '商品', '时间区间', '字段状态', '独立公开地址', '采集观察', '来源家族', '国家', '搜索信号', '公开销量信号'], timeRows, [210, 280, 160, 100, 100, 90, 180, 160, 360, 360])
 
 const evidenceRows = products.flatMap((product) => (product.events || []).map((event) => [product.id, product.zh_name || product.original_name, event.eventId, event.sourceId, event.sourceFamily, event.countryCode, event.eventType, event.sourceUrl, event.publishedAt || '未知', event.observedAt, event.evidenceStrength, event.rightsStatus, event.policyDecision, event.rawHash]))
 const evidenceSheet = addTableSheet('证据链', '完整证据链', '每条证据保留编号、原始网址、发布时间、采集时间、强度、权利与政策决定。', ['商品ID', '商品', '证据ID', '来源', '来源家族', '国家', '类型', 'URL', '发布时间', '采集时间', '证据强度', '权利', '采集政策', '原始哈希'], evidenceRows, [210, 260, 250, 170, 110, 80, 100, 420, 170, 170, 100, 110, 150, 250])

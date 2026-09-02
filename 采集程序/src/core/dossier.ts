@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { loadCountries } from './config.js'
 import { paths } from './paths.js'
-import { atomicWrite, safeJson, slug } from './utils.js'
+import { atomicWrite, credibleProductDescription, safeJson, slug } from './utils.js'
 import type { CollectorEvent, DossierField, EvidenceState, ProductAnalysis, ProductRecord } from './types.js'
 
 function field<T>(value: T | null | undefined, evidenceIds: string[], note?: string, explicitState?: EvidenceState): DossierField<T> {
@@ -26,6 +26,7 @@ function metricValues(events: CollectorEvent[], key: keyof NonNullable<Collector
 }
 
 function evidenceOf(events: CollectorEvent[]): string[] { return events.map((event) => event.eventId) }
+function independentSourceCount(events: CollectorEvent[]): number { return new Set(events.map((event) => event.sourceUrl)).size }
 
 function specsValue(specs: Record<string, unknown>, names: string[]): unknown {
   for (const name of names) if (specs[name] !== undefined && specs[name] !== null && specs[name] !== '') return specs[name]
@@ -51,6 +52,17 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
   const firstEvidenceTime = new Date(product.first_evidence_at).getTime()
   const now = Date.now()
   const sourceFamilies = [...new Set(events.map((event) => event.sourceFamily))]
+  const independentSources = independentSourceCount(events)
+  const hintEvidence = (predicate: (hint: NonNullable<CollectorEvent['productHint']>) => boolean) =>
+    evidenceOf(events.filter((event) => event.productHint && predicate(event.productHint)))
+  const specEvidence = (names: string[]) => hintEvidence((hint) => names.some((name) => hint.specs?.[name] !== undefined && hint.specs?.[name] !== ''))
+  const supplierEvidence = (name: string) => hintEvidence((hint) => hint.supplier?.[name as keyof NonNullable<typeof hint.supplier>] !== undefined)
+  const mediaEvidenceIds = [...new Set(media.map((item) => String(item.event_id || '')).filter(Boolean))]
+  const descriptionEvents = events.filter((event) => event.sourceId !== 'manual-public-product-links-20260901' &&
+    Boolean(credibleProductDescription(event.productHint?.description, product.original_name, product.brand || '')))
+  const verifiedDescription = descriptionEvents.length
+    ? credibleProductDescription(descriptionEvents.at(-1)?.productHint?.description, product.original_name, product.brand || '')
+    : undefined
 
   const windows = [
     { name: '0–7天', min: 0, max: 7 }, { name: '8–15天', min: 8, max: 15 }, { name: '16–30天', min: 16, max: 30 },
@@ -65,6 +77,7 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
     const ids = evidenceOf(matches)
     return [window.name, {
       observedEvidenceCount: field(matches.length, ids, '仅表示本系统已采集且去重后的证据数量，不等于全网销量'),
+      independentSourceCount: field(independentSourceCount(matches), ids, '按公开URL去重；同一页面重复观察不会冒充新的独立来源'),
       sourceFamilies: field([...new Set(matches.map((event) => event.sourceFamily))], ids),
       countries: field([...new Set(matches.map((event) => event.countryCode).filter((code) => code !== 'GLOBAL'))], ids),
       searchSignals: field(metricValues(matches, 'searchVolume'), evidenceOf(metricEvents(matches, 'searchVolume'))),
@@ -77,7 +90,8 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
     const ids = evidenceOf(matches)
     return [country.code, {
       countryName: field(country.nameZh, ids, '目标国家固定配置'),
-      evidenceCount: field(matches.length, ids, '零表示当前采集来源未发现证据，不代表市场上绝对不存在'),
+      evidenceCount: field(independentSourceCount(matches), ids, '按公开URL去重；零不代表市场上绝对不存在'),
+      observedEvidenceCount: field(matches.length, ids, '同一公开页面的多次观察会分别保留，但不会冒充独立来源'),
       latestEvidenceAt: field(matches.length ? matches.map((event) => event.publishedAt || event.observedAt).sort().at(-1) : null, ids),
       search: field(metricValues(matches, 'searchVolume'), evidenceOf(metricEvents(matches, 'searchVolume'))),
       news: field(matches.filter((event) => event.sourceFamily === 'NEWS').map((event) => event.sourceUrl), evidenceOf(matches.filter((event) => event.sourceFamily === 'NEWS'))),
@@ -94,6 +108,7 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
   }))
   const summary = `${product.zh_name || product.original_name}当前研究热度${analysis.researchHeatScore.toFixed(0)}分。` +
     `系统将其归入${analysis.reuseBucket === 'REUSABLE' ? '可复用商品库' : analysis.status === 'ACTIVE' ? '高热度不可复用研究库' : '30天待复核区（不会进入研究报表）'}。` +
+    `现有${events.length}条观察记录，来自${independentSources}个独立公开地址、${sourceFamilies.length}类来源。` +
     `当前结论：${analysis.restrictionReason || analysis.researchReason}。热度是公开信号评分，不是销量或利润证明。`
 
   return {
@@ -102,22 +117,22 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
       originalName: field(product.original_name, evidenceIds), chineseName: field(product.zh_name, evidenceIds),
       brand: identityValue(product.brand, events, 'brand'), model: identityValue(product.model, events, 'model'),
       gtin: identityValue(product.gtin, events, 'gtin'), mpn: identityValue(product.mpn, events, 'mpn'),
-      category: field(product.category, evidenceIds), variants: field(variants, evidenceIds),
+      category: field(product.category, hintEvidence((hint) => Boolean(hint.category))), variants: field(variants, hintEvidence((hint) => Boolean(hint.variants?.length))),
     },
     productExplanation: {
-      whatItIs: field(product.description_zh, evidenceIds), howToUse: field(specsValue(specs, ['howToUse', 'instructions']), evidenceIds),
-      problemSolved: field(specsValue(specs, ['problemSolved', 'benefit']), evidenceIds), useCases: field(useCases, evidenceIds),
-      targetUsers: field(targetUsers, evidenceIds), unsuitableScenarios: field(unsuitable, evidenceIds),
+      whatItIs: field(verifiedDescription, evidenceOf(descriptionEvents)), howToUse: field(specsValue(specs, ['howToUse', 'instructions']), specEvidence(['howToUse', 'instructions'])),
+      problemSolved: field(specsValue(specs, ['problemSolved', 'benefit']), specEvidence(['problemSolved', 'benefit'])), useCases: field(useCases, hintEvidence((hint) => Boolean(hint.useCases?.length))),
+      targetUsers: field(targetUsers, hintEvidence((hint) => Boolean(hint.targetUsers?.length))), unsuitableScenarios: field(unsuitable, hintEvidence((hint) => Boolean(hint.unsuitableScenarios?.length))),
     },
     physicalAndPackage: {
-      material: field(specsValue(specs, ['material', 'materials']), evidenceIds), size: field(specsValue(specs, ['size', 'dimensions']), evidenceIds),
-      weight: field(specsValue(specs, ['weight']), evidenceIds), capacity: field(specsValue(specs, ['capacity']), evidenceIds),
-      power: field(specsValue(specs, ['power', 'wattage']), evidenceIds), plug: field(specsValue(specs, ['plug', 'plugType']), evidenceIds),
-      packaging: field(specsValue(specs, ['packaging', 'package']), evidenceIds), accessories: field(specsValue(specs, ['accessories', 'included']), evidenceIds),
+      material: field(specsValue(specs, ['material', 'materials']), specEvidence(['material', 'materials'])), size: field(specsValue(specs, ['size', 'dimensions']), specEvidence(['size', 'dimensions'])),
+      weight: field(specsValue(specs, ['weight']), specEvidence(['weight'])), capacity: field(specsValue(specs, ['capacity']), specEvidence(['capacity'])),
+      power: field(specsValue(specs, ['power', 'wattage']), specEvidence(['power', 'wattage'])), plug: field(specsValue(specs, ['plug', 'plugType']), specEvidence(['plug', 'plugType'])),
+      packaging: field(specsValue(specs, ['packaging', 'package']), specEvidence(['packaging', 'package'])), accessories: field(specsValue(specs, ['accessories', 'included']), specEvidence(['accessories', 'included'])),
     },
     functionsAndDifferentiation: {
-      coreFunctions: field(features, evidenceIds), differentiators: field(specsValue(specs, ['differentiators', 'uniqueSellingPoints']), evidenceIds),
-      demonstrableFeatures: field(specsValue(specs, ['demonstrableFeatures', 'demoPoints']), evidenceIds),
+      coreFunctions: field(features, hintEvidence((hint) => Boolean(hint.features?.length))), differentiators: field(specsValue(specs, ['differentiators', 'uniqueSellingPoints']), specEvidence(['differentiators', 'uniqueSellingPoints'])),
+      demonstrableFeatures: field(specsValue(specs, ['demonstrableFeatures', 'demoPoints']), specEvidence(['demonstrableFeatures', 'demoPoints'])),
     },
     chronology: {
       earliestEvidence: field(product.first_evidence_at, evidenceIds), trendStart: field(analysis.trendStartAt, evidenceIds, analysis.trendStartAt ? undefined : '未达到连续、多源趋势起点条件'),
@@ -137,9 +152,9 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
       publicSales: field(metricValues(events, 'publicSales'), evidenceOf(metricEvents(events, 'publicSales')), '只有来源明确公开时才记录；不得反推或估算'),
     },
     supplyAndLogistics: {
-      supplierName: field(supplier.name, evidenceIds), supplierUrl: field(supplier.url, evidenceIds), supplierVerified: field(supplier.verified, evidenceIds),
-      moq: field(supplier.moq, evidenceIds), leadTimeDays: field(supplier.leadTimeDays, evidenceIds), shipsTo: field(supplier.shipsTo, evidenceIds),
-      returnsPolicy: field(supplier.returnsPolicy, evidenceIds), logisticsRestrictions: field(supplier.logisticsRestrictions, evidenceIds),
+      supplierName: field(supplier.name, supplierEvidence('name')), supplierUrl: field(supplier.url, supplierEvidence('url')), supplierVerified: field(supplier.verified, supplierEvidence('verified')),
+      moq: field(supplier.moq, supplierEvidence('moq')), leadTimeDays: field(supplier.leadTimeDays, supplierEvidence('leadTimeDays')), shipsTo: field(supplier.shipsTo, supplierEvidence('shipsTo')),
+      returnsPolicy: field(supplier.returnsPolicy, supplierEvidence('returnsPolicy')), logisticsRestrictions: field(supplier.logisticsRestrictions, supplierEvidence('logisticsRestrictions')),
     },
     shopifyAssessment: {
       fit: field(analysis.reuseBucket === 'REUSABLE' ? '通过初筛' : '当前不具备安全商业复用条件', evidenceIds),
@@ -147,9 +162,9 @@ export function buildDossier(product: ProductRecord, analysis: ProductAnalysis, 
       commercialGrade: field(analysis.commercialGrade, evidenceIds), commercialScore: field(analysis.commercialScore, evidenceIds),
     },
     mediaAndRights: {
-      references: field(media.map((item) => ({ url: item.url, type: item.media_type, rights: item.rights_status, license: item.license, attribution: item.attribution })), evidenceIds),
-      authorizedCommercialUseCount: field(authorized.length, evidenceIds), overallRightsStatus: field(analysis.rightsStatus, evidenceIds),
-      attributionRequirements: field(authorized.map((item) => item.attribution).filter(Boolean), evidenceIds),
+      references: field(media.map((item) => ({ url: item.url, type: item.media_type, rights: item.rights_status, license: item.license, attribution: item.attribution })), mediaEvidenceIds),
+      authorizedCommercialUseCount: field(authorized.length, mediaEvidenceIds), overallRightsStatus: field(analysis.rightsStatus, mediaEvidenceIds),
+      attributionRequirements: field(authorized.map((item) => item.attribution).filter(Boolean), mediaEvidenceIds),
       storageRule: field(analysis.reuseBucket === 'REUSABLE' ? '只允许保存明确商业授权素材' : '只保留公开链接、元数据与研究说明，不下载未知权利素材', evidenceIds),
     },
     promotionAndCompetition: {

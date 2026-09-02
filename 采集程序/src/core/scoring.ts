@@ -1,5 +1,5 @@
 import { loadCountries, loadKeywordRules } from './config.js'
-import { ageBand, clamp, isProductLike, normalizeText, safeJson, textHasTerm } from './utils.js'
+import { ageBand, clamp, credibleProductDescription, isProductLike, normalizeText, safeJson, textHasTerm } from './utils.js'
 import type { CollectorEvent, ProductAnalysis, ProductRecord, RightsStatus } from './types.js'
 
 function median(values: number[]): number {
@@ -22,7 +22,18 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   // 公开网页研究链接只保存为跳转、核对与证据链入口。它不代表该页面
   // 已证明商品身份、真实需求、价格、供应或商业可用性，因此绝不能影响分数或闸门。
   // 注意：离线历史广告同为仅研究来源，但有独立的、允许使用的广告代理分值，不能一概排除。
-  const scoringEvents = events.filter((event) => event.sourceId !== 'manual-public-product-links-20260901')
+  const eligibleEvents = events.filter((event) => event.sourceId !== 'manual-public-product-links-20260901')
+  const latestCommerceByPage = new Map<string, CollectorEvent>()
+  for (const event of eligibleEvents.filter((item) => item.sourceFamily === 'COMMERCE')) {
+    const previous = latestCommerceByPage.get(event.sourceUrl)
+    if (!previous || new Date(event.observedAt).getTime() > new Date(previous.observedAt).getTime()) latestCommerceByPage.set(event.sourceUrl, event)
+  }
+  // Re-reading one unchanged product page is freshness monitoring, not a new
+  // independent commercial signal.  Only the latest observation per page may score.
+  const scoringEvents = [
+    ...eligibleEvents.filter((event) => event.sourceFamily !== 'COMMERCE'),
+    ...latestCommerceByPage.values(),
+  ]
   const signalWeights = new Map<string, number>()
   const families = new Set<string>(); const countries = new Set<string>()
   const heatFamilies = new Set<string>(); const heatCountries = new Set<string>(); const heatDays = new Set<string>()
@@ -88,7 +99,9 @@ export function analyzeProduct(product: ProductRecord, events: CollectorEvent[],
   const costReady = Boolean(scoringEvents.some((event) => Number(event.metrics?.price || 0) > 0))
 
   const mandatoryChecks = [
-    Boolean(product.original_name), identityConfirmed, Boolean(product.description_zh), safeJson(product.use_cases_json, []).length > 0,
+    Boolean(product.original_name), identityConfirmed,
+    scoringEvents.some((event) => Boolean(credibleProductDescription(event.productHint?.description, product.original_name, product.brand || ''))),
+    safeJson(product.use_cases_json, []).length > 0,
     Object.keys(specs).length > 0, countries.size > 0, costReady, supplierReady, media.length > 0,
     authorizedMedia.length > 0, responsibleReady, scoringEvents.length > 0,
   ]

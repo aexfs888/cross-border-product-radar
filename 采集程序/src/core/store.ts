@@ -307,10 +307,12 @@ export class RadarStore {
   updateAnalysis(product: ProductRecord, analysis: ProductAnalysis, dossier: Record<string, unknown>, options: { resetPeak?: boolean } = {}): void {
     const previousBucket = product.reuse_bucket
     const newPeak = options.resetPeak ? analysis.researchHeatScore : Math.max(Number(product.peak_heat_score || 0), analysis.researchHeatScore)
-    this.db.prepare(`UPDATE products SET trend_start_at=?,trend_age_band=?,lifecycle=?,research_heat_score=?,peak_heat_score=?,
+    const descriptionField = (dossier.productExplanation as Record<string, unknown> | undefined)?.whatItIs as { state?: string, value?: unknown } | undefined
+    const verifiedDescription = descriptionField?.state === '已验证' && typeof descriptionField.value === 'string' ? descriptionField.value : null
+    this.db.prepare(`UPDATE products SET description_zh=?,trend_start_at=?,trend_age_band=?,lifecycle=?,research_heat_score=?,peak_heat_score=?,
       commercial_score=?,completeness=?,confidence=?,reuse_bucket=?,commercial_grade=?,rights_status=?,risk_flags_json=?,research_reason=?,
       restriction_reason=?,missing_requirements_json=?,status=?,dossier_json=?,updated_at=? WHERE id=?`)
-      .run(analysis.trendStartAt, analysis.trendAgeBand, analysis.lifecycle, analysis.researchHeatScore, newPeak,
+      .run(verifiedDescription, analysis.trendStartAt, analysis.trendAgeBand, analysis.lifecycle, analysis.researchHeatScore, newPeak,
         analysis.commercialScore, analysis.completeness, analysis.confidence, analysis.reuseBucket, analysis.commercialGrade,
         analysis.rightsStatus, JSON.stringify(analysis.riskFlags), analysis.researchReason, analysis.restrictionReason,
         JSON.stringify(analysis.missingRequirements), analysis.status, JSON.stringify(dossier), nowIso(), product.id)

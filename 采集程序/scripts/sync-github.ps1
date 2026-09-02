@@ -33,10 +33,30 @@ function Invoke-GitHubApiFallback([string]$Uri, [string]$Destination = '') {
   $json = (& gh api $endpoint 2>&1 | Out-String)
   if ($LASTEXITCODE -ne 0) { throw "GitHub API 备用下载失败：$json" }
   $payload = $json | ConvertFrom-Json
-  if ($payload.type -ne 'file' -or [string]::IsNullOrWhiteSpace([string]$payload.content) -or [string]$payload.encoding -ne 'base64') {
+  if ($payload.type -ne 'file') {
     throw "GitHub API 备用下载返回了非文件内容：$relativePath"
   }
-  $bytes = [Convert]::FromBase64String(([string]$payload.content -replace '\s', ''))
+  $encoded = [string]$payload.content
+  $encoding = [string]$payload.encoding
+  # Contents API omits inline content once a file grows beyond its response
+  # limit.  Use the same authenticated public API to read the exact git blob;
+  # this avoids depending on an intermittently failing raw CDN connection.
+  if ([string]::IsNullOrWhiteSpace($encoded) -and -not [string]::IsNullOrWhiteSpace([string]$payload.git_url)) {
+    $blobUri = [Uri]$payload.git_url
+    if ($blobUri.Scheme -ne 'https' -or $blobUri.Host -ne 'api.github.com' -or $blobUri.AbsolutePath -notmatch '^/repos/aexfs888/cross-border-product-radar/git/blobs/[a-fA-F0-9]{40,64}$') {
+      throw "GitHub Blob API 地址安全校验失败：$relativePath"
+    }
+    $blobEndpoint = $blobUri.AbsolutePath.TrimStart('/')
+    $blobJson = (& gh api $blobEndpoint 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "GitHub Blob API 备用下载失败：$blobJson" }
+    $blob = $blobJson | ConvertFrom-Json
+    $encoded = [string]$blob.content
+    $encoding = [string]$blob.encoding
+  }
+  if ([string]::IsNullOrWhiteSpace($encoded) -or $encoding -ne 'base64') {
+    throw "GitHub API 备用下载未返回可解码文件：$relativePath"
+  }
+  $bytes = [Convert]::FromBase64String(($encoded -replace '\s', ''))
   if ($bytes.Length -gt 10MB) { throw "GitHub API 备用下载文件超过 10MB 限制：$relativePath" }
   if ([string]::IsNullOrWhiteSpace($Destination)) {
     return [pscustomobject]@{ StatusCode = 200; Content = [Text.Encoding]::UTF8.GetString($bytes) }

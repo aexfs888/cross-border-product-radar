@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser'
 import { loadApprovedProductPages, loadCountries, loadKeywordRules, loadProductWatchlist } from '../core/config.js'
 import { collectApprovedProductPage } from './approved-web.js'
-import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, normalizeText, nowIso, parseMagnitude, sha256, textHasTerm, withRetry } from '../core/utils.js'
+import { asArray, canonicalUrl, createId, fetchText, hostOf, isProductLike, normalizeText, nowIso, parseMagnitude, sha256, sleep, textHasTerm, withRetry } from '../core/utils.js'
 import type { CollectorEvent, CountryConfig, SourceConfig } from '../core/types.js'
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', removeNSPrefix: true, trimValues: true })
@@ -198,6 +198,95 @@ async function sitemapSafety(runId: string, source: SourceConfig): Promise<Colle
   })
 }
 
+function safetyGateDate(value: unknown): number {
+  const match = String(value || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  return match ? Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])) : NaN
+}
+
+function cleanXmlValue(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'object') return ''
+  return String(value).replace(/\s+/g, ' ').trim()
+}
+
+export function safetyGateReportUrls(body: string, lookbackDays = 35, now = Date.now()): string[] {
+  const parsed = xml.parse(body)
+  const cutoff = now - lookbackDays * 86_400_000
+  return asArray(parsed?.['Safety-Gate']?.weeklyReport)
+    .filter((report: any) => {
+      const published = safetyGateDate(report?.publicationDate)
+      return Number.isFinite(published) && published >= cutoff && published <= now + 86_400_000
+    })
+    .map((report: any) => cleanXmlValue(report?.URL))
+    .filter((url: string) => /^https:\/\/ec\.europa\.eu\/safety-gate-alerts\/api\/download\/weeklyReport\/detail\/xml\//i.test(url))
+}
+
+export function safetyGateDetailEvents(runId: string, source: SourceConfig, body: string): CollectorEvent[] {
+  const parsed = xml.parse(body)
+  const reportDate = cleanXmlValue(parsed?.['Safety-Gate']?.report_date)
+  const publishedAt = Number.isFinite(safetyGateDate(reportDate)) ? new Date(safetyGateDate(reportDate)).toISOString() : undefined
+  const results: CollectorEvent[] = []
+  for (const alert of asArray(parsed?.['Safety-Gate']?.notifications)) {
+    const product = cleanXmlValue((alert as any)?.product)
+    const name = cleanXmlValue((alert as any)?.name)
+    const brand = cleanXmlValue((alert as any)?.brand)
+    const model = cleanXmlValue((alert as any)?.type_numberOfModel)
+    const barcode = cleanXmlValue((alert as any)?.barcode)
+    const caseNumber = cleanXmlValue((alert as any)?.caseNumber)
+    const reference = cleanXmlValue((alert as any)?.reference)
+    const riskType = cleanXmlValue((alert as any)?.riskType)
+    const level = cleanXmlValue((alert as any)?.level)
+    const notifyingCountry = cleanXmlValue((alert as any)?.notifyingCountry)
+    const title = [brand, name || product, model].filter(Boolean).join(' ').trim() || product
+    if (!title || !caseNumber || !/^https:\/\/ec\.europa\.eu\/safety-gate-alerts\/screen\/webReport\/alertDetail\//i.test(reference)) continue
+    const countryCode = sourceCountryMap[notifyingCountry] || 'EU'
+    const raw = {
+      externalId: caseNumber,
+      title,
+      riskLevel: [level, riskType].filter(Boolean).join('；') || 'Safety Gate alert',
+      reportDate,
+      alert,
+    }
+    const base = eventBase(runId, source, reference, countryCode, 'SAFETY', raw)
+    results.push({
+      ...base,
+      publishedAt,
+      evidenceStrength: 1,
+      productHint: {
+        originalName: title,
+        brand: brand || undefined,
+        model: model || undefined,
+        gtin: /^\d{8,14}$/.test(barcode) ? barcode : undefined,
+        category: cleanXmlValue((alert as any)?.category) || undefined,
+        description: cleanXmlValue((alert as any)?.description) || undefined,
+      },
+      raw,
+    })
+  }
+  return results
+}
+
+async function euSafetyGate(runId: string, source: SourceConfig): Promise<CollectorEvent[]> {
+  // This endpoint occasionally resets reused TLS sockets.  Requesting a fresh
+  // public connection per XML file is slower but materially more reliable and
+  // still respects the global same-domain delay.
+  const request = (url: string) => fetchText(url, { headers: { Connection: 'close' } })
+  const listBody = await withRetry(() => request(String(source.endpoint)))
+  const urls = safetyGateReportUrls(listBody, Number(source.lookbackDays || 35))
+  const maximum = Number(source.maxRecords || 500)
+  const results: CollectorEvent[] = []
+  let lastError: unknown
+  for (let index = 0; index < urls.length; index += 1) {
+    if (index > 0) await sleep(10_000)
+    try {
+      const detailBody = await withRetry(() => request(urls[index]))
+      results.push(...safetyGateDetailEvents(runId, source, detailBody).slice(0, Math.max(0, maximum - results.length)))
+    } catch (error) { lastError = error }
+    if (results.length >= maximum) break
+  }
+  if (!results.length && lastError) throw lastError
+  return results
+}
+
 async function ecb(runId: string, source: SourceConfig): Promise<CollectorEvent[]> {
   const endpoint = String(source.endpoint); const parsed = xml.parse(await withRetry(() => fetchText(endpoint)))
   const cubes = asArray(parsed?.Envelope?.Cube?.Cube)
@@ -218,6 +307,7 @@ export async function collectSource(runId: string, source: SourceConfig, countri
     case 'ATOM_SAFETY': return atomSafety(runId, source)
     case 'GENERIC_RSS_SAFETY': return genericRssSafety(runId, source)
     case 'SITEMAP_SAFETY': return sitemapSafety(runId, source)
+    case 'EU_SAFETY_GATE_XML': return euSafetyGate(runId, source)
     case 'ECB_XML': return ecb(runId, source)
     default: throw new Error(`尚未启用的采集适配器：${source.adapter}`)
   }

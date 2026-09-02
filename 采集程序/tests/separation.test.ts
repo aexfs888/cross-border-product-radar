@@ -3,7 +3,7 @@ import test from 'node:test'
 import { buildDossier } from '../src/core/dossier.js'
 import { analyzeProduct } from '../src/core/scoring.js'
 import { RadarStore } from '../src/core/store.js'
-import { matchesWatchlistHeadline } from '../src/collectors/index.js'
+import { matchesWatchlistHeadline, safetyGateDetailEvents, safetyGateReportUrls } from '../src/collectors/index.js'
 import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
 import { paths } from '../src/core/paths.js'
 import { isProductLike, naturalKey, sha256 } from '../src/core/utils.js'
@@ -220,10 +220,12 @@ test('明确非商品趋势词立即匿名化清理，不在待复核区堆积',
 test('云端来源连续失败三次熔断12小时，低频商品页每天最多运行一次', () => {
   const health: CloudSourceHealth = { schemaVersion: 1, generatedAt: new Date(0).toISOString(), sources: {} }
   const base = Date.parse('2026-09-02T00:00:00.000Z')
-  for (let index = 0; index < 3; index += 1) recordCloudSourceResult(health, 'gdelt-product-news', false, 0, { pauseAfter: 3, pauseHours: 12, now: base + index, error: 'fetch failed https://example.test/private' })
+  for (let index = 0; index < 3; index += 1) recordCloudSourceResult(health, 'gdelt-product-news', false, 0, { pauseAfter: 3, pauseHours: 12, now: base + index, error: 'fetch failed https://example.test/private at /home/runner/work/private/file.ts and E:\\secret\\token.txt' })
   const gdelt = loadSourceRules().automatic.find((source) => source.id === 'gdelt-product-news')!
   assert.equal(cloudSourceDecision(gdelt, health.sources['gdelt-product-news'], base + 1000).run, false)
   assert.equal(health.sources['gdelt-product-news'].lastError?.includes('example.test'), false)
+  assert.equal(health.sources['gdelt-product-news'].lastError?.includes('/home/runner'), false)
+  assert.equal(health.sources['gdelt-product-news'].lastError?.includes('E:\\secret'), false)
 
   const approved = loadSourceRules().automatic.find((source) => source.id === 'approved-product-jsonld')!
   recordCloudSourceResult(health, approved.id, true, 3, { pauseAfter: 3, pauseHours: 12, now: base })
@@ -252,4 +254,49 @@ test('公开商品页可补价格和身份，但不会冒充需求趋势造成�
   assert.ok(enriched.confidence > baseline.confidence)
   assert.equal(enriched.reuseBucket, 'NON_REUSABLE')
   store.close()
+})
+
+test('同一公开商品页的重复观察只按一个商业信号计分', () => {
+  const store = new RadarStore({ memory: true })
+  const first = event(110, { name: 'Repeat Observation Desk Lamp', family: 'COMMERCE', price: 20, observedAt: new Date(Date.now() - 2000).toISOString() })
+  first.sourceUrl = 'https://example.com/products/desk-lamp'
+  store.ingestEvents([first])
+  const product = store.listProducts(undefined, true)[0]
+  const baseline = analyze(store, product.id).analysis
+  const repeated = event(111, { name: 'Repeat Observation Desk Lamp', family: 'COMMERCE', price: 20, observedAt: new Date(Date.now() - 1000).toISOString() })
+  repeated.sourceUrl = first.sourceUrl
+  store.ingestEvents([repeated])
+  const afterRepeat = analyze(store, product.id)
+  assert.equal(afterRepeat.analysis.researchHeatScore, baseline.researchHeatScore)
+  const dossier = buildDossier(afterRepeat.product, afterRepeat.analysis, afterRepeat.events, afterRepeat.media) as any
+  assert.equal(dossier.chronology.timeWindows['0–7天'].independentSourceCount.value, 1)
+  assert.equal(dossier.chronology.timeWindows['0–7天'].observedEvidenceCount.value, 2)
+  assert.equal(dossier.countryPerformance.US.evidenceCount.value, 1)
+  assert.equal(dossier.countryPerformance.US.observedEvidenceCount.value, 2)
+  store.close()
+})
+
+test('欧盟 Safety Gate 官方周报索引和详情可转换为事实型安全记录', () => {
+  const now = Date.UTC(2026, 8, 2)
+  const list = `<?xml version="1.0"?><Safety-Gate>
+    <weeklyReport><publicationDate>29/08/2026</publicationDate><URL>https://ec.europa.eu/safety-gate-alerts/api/download/weeklyReport/detail/xml/10000320?language=en</URL></weeklyReport>
+    <weeklyReport><publicationDate>01/01/2026</publicationDate><URL>https://ec.europa.eu/safety-gate-alerts/api/download/weeklyReport/detail/xml/999</URL></weeklyReport>
+  </Safety-Gate>`
+  assert.deepEqual(safetyGateReportUrls(list, 35, now), ['https://ec.europa.eu/safety-gate-alerts/api/download/weeklyReport/detail/xml/10000320?language=en'])
+
+  const detail = `<?xml version="1.0"?><Safety-Gate><report_date>29/08/2026</report_date><notifications>
+    <caseNumber>IE/00001/26</caseNumber><notifyingCountry>Ireland</notifyingCountry><product>Jewellery</product><name>Necklace</name>
+    <brand>Example</brand><type_numberOfModel>N-100</type_numberOfModel><barcode>12345678</barcode><category>Jewellery</category>
+    <description>Silver-coloured necklace.</description><riskType>Chemical</riskType><level>Serious risk</level>
+    <reference>https://ec.europa.eu/safety-gate-alerts/screen/webReport/alertDetail/10000320</reference>
+  </notifications></Safety-Gate>`
+  const source = loadSourceRules().automatic.find((item) => item.id === 'eu-safety-gate-weekly')!
+  const records = safetyGateDetailEvents('eu-test', source, detail)
+  assert.equal(records.length, 1)
+  assert.equal(records[0].countryCode, 'IE')
+  assert.equal(records[0].productHint?.brand, 'Example')
+  assert.equal(records[0].productHint?.model, 'N-100')
+  assert.equal(records[0].productHint?.gtin, '12345678')
+  assert.match(String(records[0].raw?.riskLevel), /Chemical/)
+  assert.equal(records[0].rightsStatus, 'LINK_ONLY')
 })

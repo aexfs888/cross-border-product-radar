@@ -26,13 +26,15 @@ export function startDashboard(port = 8765): http.Server {
       try {
         json(response, 200, store.listProducts(bucket).map((product) => {
           const events = store.getEvents(product.id)
+          const independentUrls = new Set(events.map((event) => event.sourceUrl))
           const publicEvent = events.find((event) => event.sourceId.startsWith('approved-jsonld-')) || events.find((event) => event.sourceId.startsWith('manual-public-product-links-')) || events.find((event) => event.sourceUrl.startsWith('https://'))
           return {
             id: product.id, name: product.zh_name || product.original_name, originalName: product.original_name,
             heat: product.research_heat_score, peakHeat: product.peak_heat_score, commercial: product.commercial_score,
             completeness: product.completeness, confidence: product.confidence, grade: product.commercial_grade,
             bucket: product.reuse_bucket, ageBand: product.trend_age_band,
-            evidenceCount: events.length, sourceFamilies: [...new Set(events.map((event) => event.sourceFamily))],
+            evidenceCount: independentUrls.size, observationCount: events.length,
+            sourceFamilies: [...new Set(events.map((event) => event.sourceFamily))],
             countries: [...new Set(events.map((event) => event.countryCode).filter((code) => code !== 'GLOBAL'))],
             publicUrl: publicEvent?.sourceUrl.startsWith('https://') ? publicEvent.sourceUrl : null,
             missingRequirements: safeJson(product.missing_requirements_json, []),

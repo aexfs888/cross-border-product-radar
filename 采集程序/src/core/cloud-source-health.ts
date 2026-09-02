@@ -39,7 +39,12 @@ export function cloudSourceDecision(source: SourceConfig, state: CloudSourceStat
 }
 
 function cleanError(value: unknown): string {
-  return String(value instanceof Error ? value.message : value).replace(/https?:\/\/\S+/gi, '[URL]').replace(/[\r\n]+/g, ' ').slice(0, 300)
+  return String(value instanceof Error ? value.message : value)
+    .replace(/https?:\/\/\S+/gi, '[URL]')
+    .replace(/[A-Za-z]:\\[^\s"'`]+/g, '[PATH]')
+    .replace(/(^|\s)\/(?:home|tmp|var|opt|workspace|__w|runner)(?:\/[^\s"'`]*)?/gi, '$1[PATH]')
+    .replace(/[\r\n]+/g, ' ')
+    .slice(0, 300)
 }
 
 export function recordCloudSourceResult(

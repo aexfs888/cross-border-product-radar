@@ -98,7 +98,7 @@ export interface CountryConfig {
 export interface SourceConfig {
   id: string
   family: SourceFamily
-  adapter: 'GOOGLE_TRENDS_RSS' | 'GOOGLE_NEWS_RSS_WATCHLIST' | 'GDELT_DOC' | 'APPROVED_JSON_LD_WATCHLIST' | 'CPSC_XML' | 'ATOM_SAFETY' | 'GENERIC_RSS_SAFETY' | 'SITEMAP_SAFETY' | 'ECB_XML' | 'GENERIC_RSS' | 'JSON_LD'
+  adapter: 'GOOGLE_TRENDS_RSS' | 'GOOGLE_NEWS_RSS_WATCHLIST' | 'GDELT_DOC' | 'APPROVED_JSON_LD_WATCHLIST' | 'CPSC_XML' | 'ATOM_SAFETY' | 'GENERIC_RSS_SAFETY' | 'SITEMAP_SAFETY' | 'EU_SAFETY_GATE_XML' | 'ECB_XML' | 'GENERIC_RSS' | 'JSON_LD'
   enabled: boolean
   endpoint?: string
   endpointTemplate?: string

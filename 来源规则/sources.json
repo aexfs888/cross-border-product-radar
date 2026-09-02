@@ -108,6 +108,18 @@
       "rights": "FACTS_ONLY"
     },
     {
+      "id": "eu-safety-gate-weekly",
+      "family": "SAFETY",
+      "adapter": "EU_SAFETY_GATE_XML",
+      "enabled": true,
+      "endpoint": "https://ec.europa.eu/safety-gate-alerts/api/download/weeklyReport/list/xml/en",
+      "lookbackDays": 35,
+      "maxRecords": 500,
+      "minIntervalHours": 24,
+      "policy": "PUBLIC_API",
+      "rights": "FACTS_ONLY"
+    },
+    {
       "id": "ecb-reference-rates",
       "family": "FX",
       "adapter": "ECB_XML",
@@ -119,7 +131,6 @@
   ],
   "optionalDisabled": [
     {"id":"common-crawl-index","reason":"必须先配置获准域名白名单，默认关闭"},
-    {"id":"eu-safety-gate","reason":"覆盖爱尔兰、挪威、瑞典、丹麦和芬兰；官方公开检索入口保留人工复核，未发现稳定且有明确自动化文档的接口，因此不逆向调用"},
     {"id":"switzerland-recallswiss","reason":"瑞士 RecallSwiss/BLV 官方入口保留人工复核，未发现稳定公开自动接口"},
     {"id":"google-trends-alpha","reason":"需要免费账号及单独授权"},
     {"id":"meta-ad-library-api","reason":"需要身份验证和免费 API 授权"},

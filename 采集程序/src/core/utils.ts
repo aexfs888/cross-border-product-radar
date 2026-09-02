@@ -173,6 +173,17 @@ export async function fetchText(value: string, init: RequestInit = {}): Promise<
   return (await fetchBytes(value, init)).toString('utf8')
 }
 
+export function credibleProductDescription(value: unknown, productName = '', brand = ''): string | undefined {
+  const text = String(value ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800)
+  if (!text) return undefined
+  const normalized = normalizeText(text)
+  if (normalized === normalizeText(productName) || (brand && normalized === normalizeText(brand))) return undefined
+  const cjkCount = (text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu) || []).length
+  if (text.length < 40 && cjkCount < 12) return undefined
+  if (/regular price|sale price|unit price|sold out|save \d+%|verified reviews|secure (?:payment|checkout)|free shipping|money-back guarantee|未取得制造商说明|只证明链接页面存在|资料均需独立核验/i.test(text)) return undefined
+  return text
+}
+
 export async function withRetry<T>(action: () => Promise<T>, retries = loadSourceRules().network.retries): Promise<T> {
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt += 1) {
