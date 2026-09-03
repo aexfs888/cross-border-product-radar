@@ -2,7 +2,8 @@ name: Free encrypted product signal collection
 
 on:
   schedule:
-    - cron: '17 */2 * * *'
+    # 与本机 Hermes 同步节奏一致：每小时第 17、47 分钟（UTC）。
+    - cron: '17,47 * * * *'
   workflow_dispatch:
 
 permissions:
