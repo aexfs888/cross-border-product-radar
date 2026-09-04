@@ -67,6 +67,8 @@ jobs:
           fi
       - name: Collect only approved public sources and encrypt immediately
         run: npm run collect:cloud
+      - name: Produce redacted source-health summary
+        run: npm run health
       - name: Prove no plaintext result remains
         shell: bash
         run: |
@@ -85,6 +87,7 @@ jobs:
             临时文件/cloud-output/*.age
             临时文件/cloud-output/*.manifest.json
             临时文件/cloud-output/*.manifest.json.sig
+            临时文件/cloud-output/source-health-summary.json
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

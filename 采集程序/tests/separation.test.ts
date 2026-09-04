@@ -8,7 +8,7 @@ import { commonCrawlCaptureEvent, googleNewsLocale, matchesWatchlistHeadline, sa
 import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
 import { paths } from '../src/core/paths.js'
 import { isProductLike, naturalKey, safeFetch, sha256 } from '../src/core/utils.js'
-import { cloudSourceDecision, recordCloudSourceResult, type CloudSourceHealth } from '../src/core/cloud-source-health.js'
+import { cloudSourceDecision, recordCloudSourceResult, summarizeCloudSourceHealth, type CloudSourceHealth } from '../src/core/cloud-source-health.js'
 import { loadApprovedProductPages, loadSourceRules } from '../src/core/config.js'
 import type { CollectorEvent, ProductHint } from '../src/core/types.js'
 
@@ -243,6 +243,22 @@ test('云端来源连续失败三次熔断12小时，低频商品页每天最多
   assert.equal(cloudSourceDecision(approved, health.sources[approved.id], base + 23 * 3_600_000).run, false)
   assert.equal(cloudSourceDecision(approved, health.sources[approved.id], base + 24 * 3_600_000).run, true)
   assert.equal(loadApprovedProductPages().items.length, 3)
+})
+
+test('云端来源健康摘要区分正常、暂停、从未成功与过期，不暴露错误明细', () => {
+  const base = Date.parse('2026-09-04T00:00:00.000Z')
+  const sources = loadSourceRules().automatic
+  const health: CloudSourceHealth = { schemaVersion: 1, generatedAt: new Date(base).toISOString(), sources: {
+    'google-trends-rss': { consecutiveFailures: 0, lastSuccessAt: new Date(base - 3600_000).toISOString(), lastFailureAt: null, pausedUntil: null, lastError: null, recordsLastRun: 12 },
+    'gdelt-product-news': { consecutiveFailures: 3, lastSuccessAt: null, lastFailureAt: new Date(base).toISOString(), pausedUntil: new Date(base + 3600_000).toISOString(), lastError: 'secret error', recordsLastRun: 0 },
+    'ecb-reference-rates': { consecutiveFailures: 0, lastSuccessAt: new Date(base - 72 * 3600_000).toISOString(), lastFailureAt: null, pausedUntil: null, lastError: null, recordsLastRun: 1 },
+  } }
+  const summary = summarizeCloudSourceHealth(health, sources, base)
+  assert.equal(summary.configured, 12)
+  assert.equal(summary.paused, 1)
+  assert.equal(summary.stale, 1)
+  assert.ok(summary.neverSucceeded >= 1)
+  assert.equal(JSON.stringify(summary).includes('secret error'), false)
 })
 
 test('商品锚点稳定归并证据，店铺默认品牌或单独SKU不会误建新商品', () => {

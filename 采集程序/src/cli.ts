@@ -5,7 +5,7 @@ import { createFullBackup } from './core/backup.js'
 import { runDoctor } from './core/doctor.js'
 import { exportReports } from './core/exporter.js'
 import { paths } from './core/paths.js'
-import { analyzeAll, collectCloud, collectLocal, importCloudSourceHealth, importPipiadsHistory, importPublicResearchLinks, initializeProject, purgeSourceEvents, syncInbox, writeHealthSnapshot } from './core/pipeline.js'
+import { analyzeAll, collectCloud, collectLocal, importCloudSourceHealth, importPipiadsHistory, importPublicResearchLinks, initializeProject, purgeSourceEvents, syncInbox, writeCloudHealthSnapshot, writeHealthSnapshot } from './core/pipeline.js'
 import { startDashboard } from './core/server.js'
 import { RadarStore } from './core/store.js'
 import { atomicWrite } from './core/utils.js'
@@ -62,7 +62,11 @@ async function main(): Promise<void> {
   if (command === 'backup') { print(await createFullBackup()); return }
   if (command === 'prune') { const store = new RadarStore(); try { print(store.pruneLowHeat(30)) } finally { store.close() }; return }
   if (command === 'doctor') { const result = runDoctor(); print(result); if (!result.ok) process.exitCode = 1; return }
-  if (command === 'health') { print({ output: await writeHealthSnapshot() }); return }
+  if (command === 'health') {
+    const cloudOutput = await writeCloudHealthSnapshot()
+    if (cloudOutput) { print({ output: cloudOutput, scope: 'public_source_health_only' }); return }
+    print({ output: await writeHealthSnapshot(), scope: 'local_dashboard_health' }); return
+  }
   if (command === 'serve') {
     const port = Number(valueAfter(args, '--port') || 8765); startDashboard(port)
     process.stdout.write(`本地只读看板：http://127.0.0.1:${port}\n按 Ctrl+C 关闭。\n`); return

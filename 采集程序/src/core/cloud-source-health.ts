@@ -32,10 +32,38 @@ export function loadCloudSourceHealth(filePath: string): CloudSourceHealth {
 
 export function cloudSourceDecision(source: SourceConfig, state: CloudSourceState | undefined, now = Date.now()): { run: boolean, reason?: string } {
   if (!state) return { run: true }
-  if (state.pausedUntil && new Date(state.pausedUntil).getTime() > now) return { run: false, reason: `熔断至 ${state.pausedUntil}` }
+  const pausedUntil = state.pausedUntil ? new Date(state.pausedUntil).getTime() : NaN
+  if (Number.isFinite(pausedUntil) && pausedUntil > now) return { run: false, reason: `熔断至 ${state.pausedUntil}` }
   const interval = Number(source.minIntervalHours || 0) * 3_600_000
-  if (interval > 0 && state.lastSuccessAt && now - new Date(state.lastSuccessAt).getTime() < interval) return { run: false, reason: `低频来源至少间隔 ${source.minIntervalHours} 小时` }
+  const lastSuccessAt = state.lastSuccessAt ? new Date(state.lastSuccessAt).getTime() : NaN
+  if (interval > 0 && Number.isFinite(lastSuccessAt) && now - lastSuccessAt < interval) return { run: false, reason: `低频来源至少间隔 ${source.minIntervalHours} 小时` }
   return { run: true }
+}
+
+export function summarizeCloudSourceHealth(health: CloudSourceHealth, sources: SourceConfig[], now = Date.now()): {
+  configured: number
+  healthy: number
+  paused: number
+  neverSucceeded: number
+  stale: number
+  sources: Array<{ sourceId: string, status: 'healthy' | 'paused' | 'never_succeeded' | 'stale', recordsLastRun: number, lastSuccessAt: string | null, pausedUntil: string | null }>
+} {
+  const rows = sources.filter((source) => source.enabled).map((source) => {
+    const state = health.sources[source.id] || emptySource()
+    const decision = cloudSourceDecision(source, state, now)
+    const lastSuccess = state.lastSuccessAt ? new Date(state.lastSuccessAt).getTime() : NaN
+    const maxAge = Math.max(36, Number(source.minIntervalHours || 0) * 3 + 12) * 3_600_000
+    const status: 'healthy' | 'paused' | 'never_succeeded' | 'stale' = !decision.run && state.pausedUntil ? 'paused' : !Number.isFinite(lastSuccess) ? 'never_succeeded' : now - lastSuccess > maxAge ? 'stale' : 'healthy'
+    return { sourceId: source.id, status, recordsLastRun: Number(state.recordsLastRun || 0), lastSuccessAt: state.lastSuccessAt || null, pausedUntil: state.pausedUntil || null }
+  })
+  return {
+    configured: rows.length,
+    healthy: rows.filter((row) => row.status === 'healthy').length,
+    paused: rows.filter((row) => row.status === 'paused').length,
+    neverSucceeded: rows.filter((row) => row.status === 'never_succeeded').length,
+    stale: rows.filter((row) => row.status === 'stale').length,
+    sources: rows,
+  }
 }
 
 function cleanError(value: unknown): string {

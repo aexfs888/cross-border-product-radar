@@ -8,7 +8,7 @@ import { publicResearchLinkEvents } from '../importers/public-research-links.js'
 import { loadSourceRules } from './config.js'
 import { buildDossier, writeDossierFile } from './dossier.js'
 import { decryptWithAge, encryptWithAge, ensureLocalKeys, verifyFile, writeManifest } from './crypto.js'
-import { cloudSourceDecision, loadCloudSourceHealth, recordCloudSourceResult, saveCloudSourceHealth } from './cloud-source-health.js'
+import { cloudSourceDecision, loadCloudSourceHealth, recordCloudSourceResult, saveCloudSourceHealth, summarizeCloudSourceHealth } from './cloud-source-health.js'
 import { paths } from './paths.js'
 import { analyzeProduct } from './scoring.js'
 import { RadarStore } from './store.js'
@@ -168,6 +168,22 @@ export async function syncInbox(): Promise<Record<string, unknown>> {
     store.audit('CLOUD_SYNC_COMPLETE', `同步${files}个加密包、${eventsCount}条事件`, { files, eventsCount, errors, analysis, nonProducts, pruned })
     return { ok: errors.length === 0, files, events: eventsCount, errors, analysis, nonProducts, pruned }
   } finally { store.close() }
+}
+
+export async function writeCloudHealthSnapshot(): Promise<string | null> {
+  const sourceHealthFile = process.env.RADAR_CLOUD_SOURCE_HEALTH_FILE
+  if (!sourceHealthFile) return null
+  const output = path.join(paths.temp, 'cloud-output', 'source-health-summary.json')
+  const summary = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    scope: 'public_source_health_only',
+    cloudSources: summarizeCloudSourceHealth(loadCloudSourceHealth(sourceHealthFile), loadSourceRules().automatic),
+    requestBudget: requestBudgetSnapshot(),
+    securityNote: '不含商品、页面正文、URL、错误详情、私钥或任何明文采集结果。'
+  }
+  await atomicWrite(output, `${JSON.stringify(summary, null, 2)}\n`)
+  return output
 }
 
 export async function writeHealthSnapshot(): Promise<string> {
