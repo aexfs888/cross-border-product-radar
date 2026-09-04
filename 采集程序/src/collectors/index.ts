@@ -60,25 +60,40 @@ async function googleTrends(runId: string, source: SourceConfig, countries: Coun
   return results
 }
 
-async function googleNewsWatchlist(runId: string, source: SourceConfig): Promise<CollectorEvent[]> {
-  const watchlist = loadProductWatchlist(); const results: CollectorEvent[] = []
-  for (const candidate of watchlist.items.slice(0, source.maxRecords || 8)) {
-    const endpoint = new URL('https://news.google.com/rss/search')
-    endpoint.searchParams.set('q', `"${candidate.query}"`); endpoint.searchParams.set('hl', 'en-US'); endpoint.searchParams.set('gl', 'US'); endpoint.searchParams.set('ceid', 'US:en')
-    const parsed = xml.parse(await withRetry(() => fetchText(endpoint.toString())))
-    for (const item of asArray(parsed?.rss?.channel?.item).slice(0, 5)) {
-      const articleTitle = String(item?.title || '').trim(); const sourceUrl = String(item?.link || endpoint)
-      const publishedAt = parseTrendDate(item?.pubDate)
-      const publishedMs = publishedAt ? new Date(publishedAt).getTime() : NaN
-      const cutoff = Date.now() - 180 * 86_400_000
-      if (!articleTitle || !Number.isFinite(publishedMs) || publishedMs < cutoff || publishedMs > Date.now() + 86_400_000 || !matchesWatchlistHeadline(articleTitle, candidate.query)) continue
-      const raw = { watchlist: candidate, articleTitle, publishedAt: item?.pubDate || null, source: item?.source || null }
-      const base = eventBase(runId, source, sourceUrl, 'GLOBAL', 'NEWS', raw)
-      results.push({
-        ...base, publishedAt, evidenceStrength: 0.55,
-        productHint: { originalName: candidate.name, description: 'Google News 公开 RSS 对高热实体商品观察词的匹配；文章只作为当前研究信号，不能替代商品身份、授权、供应或合规核验。', productUrl: sourceUrl },
-        metrics: {}, mediaRefs: [],
-      })
+export function googleNewsLocale(country: CountryConfig): { hl: string, gl: string, ceid: string } {
+  // 需求信号只能归入既有 11 个销售目标国；不因扩展新闻观察而扩大销售国家范围。
+  const locale = country.locales[0] || 'en'
+  const language = locale.split('-')[0] || 'en'
+  return { hl: locale, gl: country.code, ceid: `${country.code}:${language}` }
+}
+
+async function googleNewsWatchlist(runId: string, source: SourceConfig, countries: CountryConfig[]): Promise<CollectorEvent[]> {
+  const watchlist = loadProductWatchlist(); const results: CollectorEvent[] = []; const seen = new Set<string>()
+  // 原先只读美国版 Google News。现在以同一白名单观察词覆盖既有 11 个销售目标国，
+  // 每国只取少量近期标题；同一文章 URL 只保留一次，避免重复观察冒充独立证据。
+  for (const country of countries) {
+    const locale = googleNewsLocale(country)
+    for (const candidate of watchlist.items.slice(0, source.maxRecords || 3)) {
+      const endpoint = new URL('https://news.google.com/rss/search')
+      endpoint.searchParams.set('q', `"${candidate.query}"`)
+      endpoint.searchParams.set('hl', locale.hl); endpoint.searchParams.set('gl', locale.gl); endpoint.searchParams.set('ceid', locale.ceid)
+      const parsed = xml.parse(await withRetry(() => fetchText(endpoint.toString())))
+      for (const item of asArray(parsed?.rss?.channel?.item).slice(0, 3)) {
+        const articleTitle = String(item?.title || '').trim(); const sourceUrl = String(item?.link || endpoint)
+        const publishedAt = parseTrendDate(item?.pubDate)
+        const publishedMs = publishedAt ? new Date(publishedAt).getTime() : NaN
+        const cutoff = Date.now() - 180 * 86_400_000
+        const fingerprint = canonicalUrl(sourceUrl)
+        if (!articleTitle || seen.has(fingerprint) || !Number.isFinite(publishedMs) || publishedMs < cutoff || publishedMs > Date.now() + 86_400_000 || !matchesWatchlistHeadline(articleTitle, candidate.query)) continue
+        seen.add(fingerprint)
+        const raw = { watchlist: candidate, articleTitle, publishedAt: item?.pubDate || null, source: item?.source || null, country: country.code, locale }
+        const base = eventBase(runId, source, sourceUrl, country.code, 'NEWS', raw)
+        results.push({
+          ...base, publishedAt, evidenceStrength: 0.55,
+          productHint: { originalName: candidate.name, description: `Google News ${country.nameZh}公开 RSS 对高热实体商品观察词的匹配；文章只作为当前研究信号，不能替代商品身份、授权、供应或合规核验。`, productUrl: sourceUrl },
+          metrics: {}, mediaRefs: [],
+        })
+      }
     }
   }
   return results
@@ -380,7 +395,7 @@ async function ecb(runId: string, source: SourceConfig): Promise<CollectorEvent[
 export async function collectSource(runId: string, source: SourceConfig, countries = loadCountries()): Promise<CollectorEvent[]> {
   switch (source.adapter) {
     case 'GOOGLE_TRENDS_RSS': return googleTrends(runId, source, countries)
-    case 'GOOGLE_NEWS_RSS_WATCHLIST': return googleNewsWatchlist(runId, source)
+    case 'GOOGLE_NEWS_RSS_WATCHLIST': return googleNewsWatchlist(runId, source, countries)
     case 'GDELT_DOC': return gdelt(runId, source)
     case 'APPROVED_JSON_LD_WATCHLIST': return approvedJsonLdWatchlist(runId)
     case 'COMMON_CRAWL_INDEX': return commonCrawlApprovedPages(runId, source)

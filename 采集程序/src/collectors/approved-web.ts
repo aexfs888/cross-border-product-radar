@@ -1,4 +1,6 @@
 import fs from 'node:fs'
+import path from 'node:path'
+import { spawn } from 'node:child_process'
 import { load } from 'cheerio'
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
@@ -33,6 +35,50 @@ function firstProductJsonLd(html: string): Record<string, any> | null {
 function textValue(value: unknown): string | undefined {
   const result = String(value ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   return result || undefined
+}
+
+type ScraplingParsedFields = {
+  title?: string | null
+  description?: string | null
+  image?: string | null
+  price?: string | null
+  currency?: string | null
+  availability?: string | null
+  parser?: string
+}
+
+async function parseApprovedHtmlWithScrapling(html: string, pageUrl: string): Promise<ScraplingParsedFields | null> {
+  // This is parsing-only. It receives HTML already fetched by safeFetch after DNS,
+  // HTTPS, redirect, domain allowlist, rate-limit, and size checks. No browser,
+  // proxy, login state, or network capability is exposed to the Python helper.
+  const configured = process.env.RADAR_SCRAPLING_PYTHON
+  const localPython = path.join(paths.root, '.local-tools', 'scrapling-parser', 'Scripts', 'python.exe')
+  const python = configured || (fs.existsSync(localPython) ? localPython : null)
+  const script = path.join(paths.root, '采集程序', 'scripts', 'scrapling-public-html-parser.py')
+  if (!python || !fs.existsSync(script)) return null
+  try {
+    const output = await new Promise<string>((resolve, reject) => {
+      const child = spawn(python, [script], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+      let stdout = ''; let stderr = ''
+      const timer = setTimeout(() => { child.kill(); reject(new Error('Scrapling parser timeout')) }, 20_000)
+      child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8')
+      child.stdout.on('data', (chunk: string) => { stdout += chunk })
+      child.stderr.on('data', (chunk: string) => { stderr += chunk })
+      child.on('error', (error) => { clearTimeout(timer); reject(error) })
+      child.on('close', (code) => {
+        clearTimeout(timer)
+        if (code === 0 && Buffer.byteLength(stdout, 'utf8') <= 512 * 1024) resolve(stdout)
+        else reject(new Error(stderr || `Scrapling parser exited ${code}`))
+      })
+      child.stdin.end(JSON.stringify({ html, url: pageUrl }))
+    })
+    const parsed = JSON.parse(output) as ScraplingParsedFields
+    return parsed?.parser === 'scrapling-selector' ? parsed : null
+  } catch {
+    // Parsing is an optional, local quality fallback. The verified JSON-LD path
+    // remains authoritative when this helper is unavailable or malformed.
+    return null
+  }
 }
 
 function itemList(value: unknown): any[] { return Array.isArray(value) ? value : value ? [value] : [] }
@@ -79,18 +125,20 @@ export async function collectApprovedProductPage(
   const html = await fetchText(url.toString(), { headers: { Accept: 'text/html,application/xhtml+xml' } })
   const product = firstProductJsonLd(html)
   if (!product?.name) return []
+  const scrapling = await parseApprovedHtmlWithScrapling(html, url.toString())
   let readable = ''
   try { readable = new Readability(new JSDOM(html, { url: url.toString() }).window.document).parse()?.textContent?.trim() || '' } catch { /* JSON-LD 仍可用 */ }
   const $ = load(html)
   const rawBrandForDescription = typeof product.brand === 'object' ? textValue(product.brand.name) : textValue(product.brand)
   const description = usefulDescription([
     product.description,
+    scrapling?.description,
     $('meta[property="og:description"]').attr('content'),
     $('meta[name="description"]').attr('content'),
     readable,
   ], String(product.name), rawBrandForDescription || '')
   const offers = itemList(product.offers).find((item) => item && typeof item === 'object') as Record<string, any> | undefined || {}
-  const image = itemList(product.image).map((item) => typeof item === 'object' ? item?.url || item?.contentUrl : item).find(Boolean)
+  const image = itemList(product.image).map((item) => typeof item === 'object' ? item?.url || item?.contentUrl : item).find(Boolean) || scrapling?.image
   const sourceUrl = canonicalUrl(url.toString())
   const rawBrand = typeof product.brand === 'object' ? textValue(product.brand.name) : textValue(product.brand)
   const brand = rawBrand && !/^(my store(?: \d+)?|store|unknown|n\/a)$/i.test(rawBrand) ? rawBrand : undefined
@@ -100,7 +148,8 @@ export async function collectApprovedProductPage(
     jsonLd: product,
     readableExcerpt: description || null,
     canonicalName: canonicalName || null,
-    extractionBoundary: '公开商品页 JSON-LD；页面主张不等于独立核验，素材仅保留链接',
+    extractionBoundary: '公开商品页 JSON-LD 为身份依据；Scrapling 仅在已抓取白名单 HTML 中补充缺失公开字段，页面主张不等于独立核验，素材仅保留链接',
+    parserFallback: scrapling?.parser || null,
   }
   const availability = String(offers.availability || '')
   return [{
@@ -119,9 +168,9 @@ export async function collectApprovedProductPage(
       features: [], supplier: { name: hostOf(sourceUrl), url: sourceUrl, verified: false },
     },
     metrics: {
-      price: Number(offers.price || offers.lowPrice || 0) || undefined,
-      currency: textValue(offers.priceCurrency), offerCount: Object.keys(offers).length ? 1 : 0,
-      stockSignal: /InStock/i.test(availability) ? 1 : 0,
+      price: Number(offers.price || offers.lowPrice || scrapling?.price || 0) || undefined,
+      currency: textValue(offers.priceCurrency || scrapling?.currency), offerCount: Object.keys(offers).length ? 1 : 0,
+      stockSignal: /InStock/i.test(`${availability} ${scrapling?.availability || ''}`) ? 1 : 0,
     },
     mediaRefs: image ? [{ url: String(image), type: 'IMAGE', rightsStatus: 'LINK_ONLY' }] : [],
   }]

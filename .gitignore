@@ -1,6 +1,8 @@
 node_modules/
+.local-tools/
 采集程序/tools/age/
 采集程序/artifact-runtime/node_modules/
+.local-tools/
 .env
 .env.*
 !.env.example

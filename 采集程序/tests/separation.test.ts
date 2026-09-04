@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import test from 'node:test'
 import { buildDossier } from '../src/core/dossier.js'
 import { analyzeProduct } from '../src/core/scoring.js'
 import { RadarStore } from '../src/core/store.js'
-import { commonCrawlCaptureEvent, matchesWatchlistHeadline, safetyGateDetailEvents, safetyGateReportUrls } from '../src/collectors/index.js'
+import { commonCrawlCaptureEvent, googleNewsLocale, matchesWatchlistHeadline, safetyGateDetailEvents, safetyGateReportUrls } from '../src/collectors/index.js'
 import { publicResearchLinkEvents } from '../src/importers/public-research-links.js'
 import { paths } from '../src/core/paths.js'
 import { isProductLike, naturalKey, safeFetch, sha256 } from '../src/core/utils.js'
@@ -96,6 +97,16 @@ test('实体商品词采用整词匹配，避免把人物姓名中的 pet 等片
   assert.equal(isProductLike('Pete Hegseth', ['pet']), false)
   assert.equal(isProductLike('Weighted Sleep Mask', ['sleep mask']), true)
   assert.equal(isProductLike('Ticketmaster', ['ticket'], ['ticketmaster']), false)
+})
+
+test('Google News 需求观察只覆盖已配置的11个销售目标国', () => {
+  const countries = JSON.parse(fs.readFileSync(paths.countries, 'utf8')).countries
+  const source = loadSourceRules().automatic.find((item) => item.id === 'google-news-product-watchlist')!
+  assert.equal(countries.length, 11)
+  assert.equal(source.maxRecords, 8)
+  assert.equal(countries.length * source.maxRecords, 88)
+  assert.deepEqual(googleNewsLocale(countries.find((item: any) => item.code === 'US')), { hl: 'en-US', gl: 'US', ceid: 'US:en' })
+  assert.deepEqual(googleNewsLocale(countries.find((item: any) => item.code === 'CA')), { hl: 'en-CA', gl: 'CA', ceid: 'CA:en' })
 })
 
 test('观察词新闻必须同时命中足够的商品核心词，泛品类新闻不能挂到具体商品', () => {
