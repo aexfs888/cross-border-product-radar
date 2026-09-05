@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-05T18:22:59.849Z",
+  "sources": {
+    "google-trends-rss": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:18:49.345Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 0
+    },
+    "google-news-product-watchlist": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:47.876Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 1
+    },
+    "gdelt-product-news": {
+      "consecutiveFailures": 9,
+      "lastSuccessAt": null,
+      "lastFailureAt": "2026-09-05T13:07:31.493Z",
+      "pausedUntil": "2026-09-06T01:07:31.493Z",
+      "lastError": "Unexpected token 'Y', \"Your query\"... is not valid JSON",
+      "recordsLastRun": 0
+    },
+    "approved-product-jsonld": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T13:07:35.703Z",
+      "lastFailureAt": "2026-09-02T06:57:28.156Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "us-cpsc-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:48.307Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 156
+    },
+    "uk-opss-alerts": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:48.949Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 50
+    },
+    "canada-consumer-product-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:49.016Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "australia-accc-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:50.162Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 25
+    },
+    "new-zealand-product-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:59.344Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 82
+    },
+    "ecb-reference-rates": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T18:22:59.849Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 1
+    },
+    "eu-safety-gate-weekly": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-05T13:08:36.620Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 263
+    },
+    "common-crawl-approved-pages": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-04T18:29:17.361Z",
+      "lastFailureAt": "2026-09-04T15:10:58.045Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 0
+    }
+  }
+}
