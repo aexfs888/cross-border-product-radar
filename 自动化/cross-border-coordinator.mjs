@@ -28,8 +28,20 @@ async function atomicJson(file, value) {
   await fs.rename(temporary, file)
 }
 
+const maxHistoryEntries = 336
+
 async function appendHistory(value) {
-  await fs.appendFile(historyFile, `${JSON.stringify(value)}\n`, 'utf8')
+  let existing = ''
+  try {
+    existing = await fs.readFile(historyFile, 'utf8')
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  const entries = existing.split(/\r?\n/).filter(Boolean)
+  const retained = [...entries.slice(-(maxHistoryEntries - 1)), JSON.stringify(value)]
+  const temporary = `${historyFile}.${process.pid}.${Date.now()}.tmp`
+  await fs.writeFile(temporary, `${retained.join('\n')}\n`, 'utf8')
+  await fs.rename(temporary, historyFile)
 }
 
 async function inspectExistingLock() {
@@ -97,7 +109,6 @@ async function shadowPreflight() {
 }
 
 async function main() {
-  await fs.mkdir(stateDirectory, { recursive: true })
   if (mode === 'active') {
     const result = {
       schemaVersion: 1,
@@ -110,17 +121,16 @@ async function main() {
       networkCollectionStarted: false,
       note: '主动模式尚未启用，防止在隐私闸门未通过时采集或处理私密经营数据。',
     }
-    await appendHistory(result)
     console.log(JSON.stringify(result))
     process.exitCode = 2
     return
   }
 
+  await fs.mkdir(stateDirectory, { recursive: true })
   const previous = await readJson(stateFile, null)
   const lock = await acquireLock()
   if ('existing' in lock) {
     const result = { schemaVersion: 1, project: 'cross-border-radar', mode, runId, state: 'skipped_locked', startedAt: now.toISOString(), lock: lock.existing }
-    await appendHistory(result)
     console.log(JSON.stringify(result))
     return
   }
