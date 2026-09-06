@@ -187,6 +187,14 @@ export class RadarStore {
     return Boolean(row?.paused_until && new Date(row.paused_until).getTime() > Date.now())
   }
 
+  sourceIsDue(sourceId: string, minIntervalHours?: number, now = Date.now()): boolean {
+    const intervalMs = Number(minIntervalHours || 0) * 3_600_000
+    if (intervalMs <= 0) return true
+    const row = this.db.prepare('SELECT last_success_at FROM source_health WHERE source_id=?').get(sourceId) as { last_success_at?: string | null } | undefined
+    const lastSuccessAt = row?.last_success_at ? new Date(row.last_success_at).getTime() : NaN
+    return !Number.isFinite(lastSuccessAt) || now - lastSuccessAt >= intervalMs
+  }
+
   importCloudSourceHealth(sources: Record<string, {
     consecutiveFailures?: number, lastSuccessAt?: string | null, lastFailureAt?: string | null,
     pausedUntil?: string | null, lastError?: string | null, recordsLastRun?: number,

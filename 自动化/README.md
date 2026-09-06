@@ -19,6 +19,14 @@
 npm run automation:shadow
 ```
 
+## 公开自动采集（不含私密数据）
+
+```text
+npm run automation:public
+```
+
+该模式只执行 12 个已配置、HTTPS、白名单和请求预算受控的公开来源；写入现有本机公开研究库。单轮最多 13 分钟，低频商品页、Common Crawl 和 Safety Gate 成功后至少间隔 24 小时。它不读取 `系统数据/private/`、订单、成本、客户、Meta/Shopify 账户、Cookie 或 Token。私密 `active` 模式仍被显式阻止，且不因 BitLocker 未启用而放宽。
+
 ## 48 小时影子观察
 
 ```text

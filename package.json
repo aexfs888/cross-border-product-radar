@@ -29,7 +29,8 @@
     "check": "npm run typecheck && npm test && npm run test:powershell && npm run doctor",
     "automation:shadow": "node 自动化/cross-border-coordinator.mjs",
     "automation:shadow-status": "node 自动化/shadow-observation-status.mjs",
-    "automation:validate-private-aggregate": "node 自动化/validate-private-aggregate.mjs"
+    "automation:validate-private-aggregate": "node 自动化/validate-private-aggregate.mjs",
+    "automation:public": "set CROSS_BORDER_AUTOMATION_MODE=public&& set CROSS_BORDER_PUBLIC_COLLECTION_APPROVED=1&& node 自动化/cross-border-coordinator.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

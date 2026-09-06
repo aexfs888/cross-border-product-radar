@@ -69,20 +69,25 @@ export function runDoctor(): Record<string, unknown> {
   } catch (error) { checks.push({ name: '数据库完整性', status: 'FAIL', detail: error instanceof Error ? error.message : String(error) }) }
   const reportRuntime = path.join(paths.artifactRuntime, 'node_modules', '@oai', 'artifact-tool')
   checks.push({ name: 'Excel 报表引擎', status: fs.existsSync(reportRuntime) ? 'PASS' : 'WARN', detail: fs.existsSync(reportRuntime) ? '已连接 Codex 本地报表引擎' : '尚未连接报表引擎，采集不受影响，Excel 暂不能生成' })
+  // 本机启动器是主调度器；旧 Hermes Cron 文件仅为可选兼容检查，缺失不得阻断公开采集。
   try {
     const jobsFile = 'E:\\Hermes\\Agent\\cron\\jobs.json'
-    const parsed = JSON.parse(fs.readFileSync(jobsFile, 'utf8')) as { jobs?: Array<Record<string, any>> }
-    const job = parsed.jobs?.find((item) => item.id === '99c97b80b9eb' || item.name === '跨境热销商品雷达-本地同步')
-    const interval30 = job?.schedule?.kind === 'interval' && Number(job?.schedule?.minutes) === 30
-    const cronMatch = String(job?.schedule?.expr || '').match(/^(\d{1,2}),(\d{1,2}) \* \* \* \*$/)
-    const cronTwiceHourly = job?.schedule?.kind === 'cron' && Boolean(cronMatch && Math.abs(Number(cronMatch[1]) - Number(cronMatch[2])) === 30)
-    const scheduled = Boolean(job?.enabled && job?.state === 'scheduled' && (interval30 || cronTwiceHourly) && job?.repeat?.times === null)
-    const lastFailed = job?.last_status === 'error'
-    checks.push({
-      name: 'Hermes 30分钟同步', status: !scheduled ? 'FAIL' : lastFailed ? 'WARN' : 'PASS',
-      detail: !job ? '未找到跨境商品雷达定时任务' : `状态=${job.state}；最近=${job.last_status || '尚未运行'}；下次=${job.next_run_at || '未知'}`,
-    })
-  } catch (error) { checks.push({ name: 'Hermes 30分钟同步', status: 'FAIL', detail: error instanceof Error ? error.message : String(error) }) }
+    if (!fs.existsSync(jobsFile)) {
+      checks.push({ name: '调度器', status: 'PASS', detail: '未发现旧 Hermes Cron 文件；使用本机 Startup 协调器或手动运行' })
+    } else {
+      const parsed = JSON.parse(fs.readFileSync(jobsFile, 'utf8')) as { jobs?: Array<Record<string, any>> }
+      const job = parsed.jobs?.find((item) => item.id === '99c97b80b9eb' || item.name === '跨境热销商品雷达-本地同步')
+      const interval30 = job?.schedule?.kind === 'interval' && Number(job?.schedule?.minutes) === 30
+      const cronMatch = String(job?.schedule?.expr || '').match(/^(\d{1,2}),(\d{1,2}) \* \* \* \*$/)
+      const cronTwiceHourly = job?.schedule?.kind === 'cron' && Boolean(cronMatch && Math.abs(Number(cronMatch[1]) - Number(cronMatch[2])) === 30)
+      const scheduled = Boolean(job?.enabled && job?.state === 'scheduled' && (interval30 || cronTwiceHourly) && job?.repeat?.times === null)
+      const lastFailed = job?.last_status === 'error'
+      checks.push({
+        name: 'Hermes 30分钟同步', status: !scheduled ? 'WARN' : lastFailed ? 'WARN' : 'PASS',
+        detail: !job ? '未找到旧 Hermes 调度任务；本机 Startup 协调器仍可执行' : `状态=${job.state}；最近=${job.last_status || '尚未运行'}；下次=${job.next_run_at || '未知'}`,
+      })
+    }
+  } catch (error) { checks.push({ name: 'Hermes 30分钟同步', status: 'WARN', detail: error instanceof Error ? error.message : String(error) }) }
   const gh = spawnSync(process.platform === 'win32' ? 'gh.exe' : 'gh', ['auth', 'status'], { encoding: 'utf8', windowsHide: true })
   // Windows 凭据管理器偶尔会让 auth status 单次返回非零。用不输出内容的
   // auth token 探针复核，避免把瞬时读取失败误报为“账号未授权”。

@@ -43,6 +43,7 @@ export async function collectLocal(options: { sourceId?: string, approvedUrl?: s
       for (const source of sources) {
         if (Date.now() - startedAt > 11.5 * 60_000) { errors.push({ sourceId: source.id, error: '本轮已达到11分30秒安全截止点，留出收尾时间' }); break }
         if (store.sourceIsPaused(source.id)) { errors.push({ sourceId: source.id, error: '来源处于12小时熔断暂停期' }); continue }
+        if (!store.sourceIsDue(source.id, source.minIntervalHours)) { continue }
         try {
           const collected = await collectSource(runId, source); events.push(...collected); store.updateSourceHealth(source.id, true, collected.length)
         } catch (error) {

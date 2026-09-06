@@ -362,3 +362,13 @@ test('Common Crawl 只保留获准商品页的历史索引证据，不提高热�
   assert.equal(result.analysis.status, 'STAGING')
   store.close()
 })
+
+test('低频公开商品页在成功后必须等待配置的最小间隔', () => {
+  const store = new RadarStore({ memory: true })
+  const sourceId = 'approved-product-jsonld'
+  assert.equal(store.sourceIsDue(sourceId, 24, Date.UTC(2026, 8, 6, 0, 0, 0)), true)
+  store.updateSourceHealth(sourceId, true, 1)
+  assert.equal(store.sourceIsDue(sourceId, 24), false)
+  assert.equal(store.sourceIsDue(sourceId, 0), true)
+  store.close()
+})

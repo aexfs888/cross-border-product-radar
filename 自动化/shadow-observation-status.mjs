@@ -39,7 +39,7 @@ const qualified = history.filter((item) => item.mode === 'shadow' && item.state 
 const timestamps = qualified.map((item) => Date.parse(item.finishedAt ?? item.startedAt ?? '')).filter(Number.isFinite).sort((a, b) => a - b)
 const firstQualifiedAt = timestamps.length ? new Date(timestamps[0]).toISOString() : null
 const elapsedHours = timestamps.length ? (Date.now() - timestamps[0]) / 3_600_000 : 0
-const unexpectedStates = history.filter((item) => !['shadow_completed', 'skipped_not_due', 'skipped_locked'].includes(item.state))
+const unexpectedStates = history.filter((item) => !['shadow_completed', 'public_collection_completed', 'skipped_not_due', 'skipped_locked'].includes(item.state))
 const currentHealthy = state?.mode === 'shadow' && state?.state === 'shadow_completed' && state?.privateDataAccessed === false && state?.networkCollectionStarted === false
 const result = {
   schemaVersion: 1,

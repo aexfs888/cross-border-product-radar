@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -9,11 +10,14 @@ const stateFile = path.join(stateDirectory, 'collector-state.json')
 const lockFile = path.join(stateDirectory, 'collector.lock')
 const historyFile = path.join(stateDirectory, 'run-history.ndjson')
 const mode = process.env.CROSS_BORDER_AUTOMATION_MODE || 'shadow'
+const publicCollectionApproved = process.env.CROSS_BORDER_PUBLIC_COLLECTION_APPROVED === '1'
+const publicCollectionTimeoutMs = 13 * 60_000
+const publicCollectorProgressFile = path.join(stateDirectory, 'public-collector-progress.log')
 const now = new Date()
 const runId = `cross-${now.toISOString().replace(/[-:.TZ]/g, '')}-${process.pid}`
 const intervalMinutes = 30
 
-if (!['shadow', 'active'].includes(mode)) throw new Error('CROSS_BORDER_AUTOMATION_MODE 只能是 shadow 或 active')
+if (!['shadow', 'public', 'active'].includes(mode)) throw new Error('CROSS_BORDER_AUTOMATION_MODE 只能是 shadow、public 或 active')
 
 async function readJson(file, fallback) {
   try { return JSON.parse(await fs.readFile(file, 'utf8')) } catch (error) {
@@ -65,7 +69,7 @@ async function inspectExistingLock() {
     ageMinutes: Math.max(0, Math.floor((Date.now() - stat.mtimeMs) / 60_000)),
     startedAt: Number.isFinite(startedAt) ? metadata.startedAt : null,
     pid: Number.isInteger(metadata?.pid) ? metadata.pid : null,
-    mode: ['shadow', 'active'].includes(metadata?.mode) ? metadata.mode : null,
+    mode: ['shadow', 'public', 'active'].includes(metadata?.mode) ? metadata.mode : null,
   }
 }
 
@@ -78,6 +82,37 @@ async function acquireLock() {
     if (error?.code !== 'EEXIST') throw error
     return { existing: await inspectExistingLock() }
   }
+}
+
+function parseFinalJson(stdout) {
+  const text = stdout.trim()
+  for (let index = text.lastIndexOf('{'); index >= 0; index = text.lastIndexOf('{', index - 1)) {
+    try { return JSON.parse(text.slice(index)) } catch { }
+  }
+  return null
+}
+
+async function runPublicCollector() {
+  const command = process.platform === 'win32' ? 'cmd.exe' : 'npm'
+  const args = process.platform === 'win32'
+    ? ['/d', '/s', '/c', 'npm.cmd run collect']
+    : ['run', 'collect']
+  return await new Promise((resolve, reject) => {
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const child = spawn(command, args, { cwd: projectRoot, windowsHide: true, env: { ...process.env, CROSS_BORDER_AUTOMATION_MODE: 'public' } })
+    const writeProgress = (chunk) => fs.appendFile(publicCollectorProgressFile, String(chunk), 'utf8').catch(() => {})
+    const timer = setTimeout(() => { timedOut = true; child.kill() }, publicCollectionTimeoutMs)
+    child.stdout.on('data', (chunk) => { stdout += String(chunk); writeProgress(chunk) })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); writeProgress(chunk) })
+    child.once('error', (error) => { clearTimeout(timer); reject(error) })
+    child.once('close', (code, signal) => {
+      clearTimeout(timer)
+      const summary = parseFinalJson(stdout)
+      resolve({ exitCode: code ?? 1, signal: signal ?? null, timedOut, summary, outputBytes: Buffer.byteLength(stdout) + Buffer.byteLength(stderr) })
+    })
+  })
 }
 
 async function shadowPreflight() {
@@ -115,11 +150,11 @@ async function main() {
       project: 'cross-border-radar',
       mode,
       runId,
-      state: 'blocked_active_not_implemented',
+      state: 'blocked_private_active_not_implemented',
       startedAt: now.toISOString(),
       privateDataAccessed: false,
       networkCollectionStarted: false,
-      note: '主动模式尚未启用，防止在隐私闸门未通过时采集或处理私密经营数据。',
+      note: '私密主动模式尚未启用；不会读取或处理订单、成本、广告账户或其他经营私密数据。',
     }
     console.log(JSON.stringify(result))
     process.exitCode = 2
@@ -150,13 +185,48 @@ async function main() {
         nextEligibleAt: previous.nextEligibleAt,
         privateDataAccessed: false,
         networkCollectionStarted: false,
-        note: '影子模式尚未到下次 30 分钟检查时间；本次不读取配置、不打开数据库、不发起网络请求。',
+        note: mode === 'public' ? '公开采集尚未到下次 30 分钟检查时间；本次不打开数据库、不发起网络请求。' : '影子模式尚未到下次 30 分钟检查时间；本次不读取、不联网。',
       }
       await appendHistory(result)
       console.log(JSON.stringify(result))
       return
     }
 
+    if (mode === 'public') {
+      if (!publicCollectionApproved) {
+        const result = { schemaVersion: 1, project: 'cross-border-radar', mode, runId, state: 'blocked_public_collection_not_approved', startedAt: now.toISOString(), privateDataAccessed: false, networkCollectionStarted: false, note: '公开采集需要显式本机批准标志；未读取数据库或发起网络请求。' }
+        await appendHistory(result)
+        console.log(JSON.stringify(result))
+        process.exitCode = 2
+        return
+      }
+      const shadow = await shadowPreflight()
+      if (!shadow.ok) {
+        const result = { schemaVersion: 1, project: 'cross-border-radar', mode, runId, state: 'degraded', startedAt: now.toISOString(), preflight: shadow, privateDataAccessed: false, networkCollectionStarted: false, note: '公开采集预检未通过；未发起网络请求。' }
+        await atomicJson(stateFile, result)
+        await appendHistory(result)
+        console.log(JSON.stringify(result))
+        process.exitCode = 2
+        return
+      }
+      const collection = await runPublicCollector()
+      const summary = collection.summary && typeof collection.summary === 'object' ? collection.summary : null
+      const result = {
+        schemaVersion: 1, project: 'cross-border-radar', mode, runId,
+        state: collection.exitCode !== 0 ? 'public_collection_failed' : (Array.isArray(summary?.errors) && summary.errors.length > 0 ? 'public_collection_completed_with_errors' : 'public_collection_completed'),
+        startedAt: now.toISOString(), finishedAt: new Date().toISOString(), durationMs: Date.now() - startedAt,
+        intervalMinutes, previousState: previous?.state ?? null, preflight: shadow,
+        collection: { exitCode: collection.exitCode, timedOut: collection.timedOut, outputBytes: collection.outputBytes, events: Number(summary?.events ?? 0), errors: Array.isArray(summary?.errors) ? summary.errors.length : null, requests: summary?.requests ?? null },
+        nextEligibleAt: new Date(Date.now() + intervalMinutes * 60_000).toISOString(),
+        privateDataAccessed: false, networkCollectionStarted: true,
+        note: '仅执行已配置的公开来源采集；不读取订单、成本、客户、广告账户、Cookie、Token 或私密导入目录。',
+      }
+      await atomicJson(stateFile, result)
+      await appendHistory(result)
+      console.log(JSON.stringify(result))
+      process.exitCode = collection.exitCode === 0 ? 0 : 2
+      return
+    }
     const shadow = await shadowPreflight()
     const preflightOk = shadow.ok
     const executable = mode === 'shadow' && preflightOk
