@@ -5,10 +5,11 @@
 ## 允许的订单/广告聚合字段
 
 ```text
-date,product_key,country,currency,orders_count,net_revenue,refunds_count,refund_amount,chargebacks_count,chargeback_amount,ad_spend,attributed_purchases
+date,product_key,country,currency,orders_count,revenue_before_refunds_chargebacks,refunds_count,refund_amount,chargebacks_count,chargeback_amount,ad_spend,attributed_purchases
 ```
 
 - `product_key` 是稳定匿名键；不能使用商品明文、SKU、订单号或客户标识；
+- `revenue_before_refunds_chargebacks`：本期已确认、已扣折扣的商品销售收入，**尚未扣除**退款金额和拒付金额；不得包含代收代缴税费、不可留存的运费或任何无法作为商家收入的金额。利润账本会分别扣减 `refund_amount` 与 `chargeback_amount`，因此不得使用已经扣除两者后的“净收入”；
 - `country` 只能为 `GB, US, AU, CA, NZ, CH, IE, NO, SE, DK, FI`；
 - 金额与计数均须为零或正数；日期为 `YYYY-MM-DD`；
 - 数据必须是按日期 × 匿名商品键 × 国家 × 币种聚合后的结果。

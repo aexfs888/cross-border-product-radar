@@ -60,7 +60,7 @@ export function buildPrivateProfitLedger(aggregates, economics) {
     }
     const expected = expectedMetrics(model)
     const ordersCount = number(aggregate.orders_count)
-    const netRevenue = number(aggregate.net_revenue)
+    const netRevenue = number(aggregate.revenue_before_refunds_chargebacks)
     const refunds = number(aggregate.refund_amount)
     const chargebacks = number(aggregate.chargeback_amount)
     const adSpend = number(aggregate.ad_spend)

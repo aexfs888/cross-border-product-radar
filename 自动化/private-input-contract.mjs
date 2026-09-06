@@ -1,7 +1,7 @@
 const countries = new Set(['GB', 'US', 'AU', 'CA', 'NZ', 'CH', 'IE', 'NO', 'SE', 'DK', 'FI'])
 
 const aggregateRequiredColumns = [
-  'date', 'product_key', 'country', 'currency', 'orders_count', 'net_revenue',
+  'date', 'product_key', 'country', 'currency', 'orders_count', 'revenue_before_refunds_chargebacks',
   'refunds_count', 'refund_amount', 'chargebacks_count', 'chargeback_amount',
   'ad_spend', 'attributed_purchases',
 ]
@@ -16,7 +16,7 @@ const unitEconomicsRequiredColumns = [
 
 const forbiddenColumnPattern = /(^|_)(customer|email|phone|name|address|ip|cookie|token|order_id|checkout|payment|card)(_|$)/i
 const monetaryColumns = new Set([
-  'net_revenue', 'refund_amount', 'chargeback_amount', 'ad_spend', 'listed_price',
+  'revenue_before_refunds_chargebacks', 'refund_amount', 'chargeback_amount', 'ad_spend', 'listed_price',
   'landed_product_cost', 'packaging_cost', 'warehouse_cost', 'outbound_shipping_cost',
   'duties_tax_cost', 'refund_loss_per_order', 'support_cost', 'other_variable_cost',
 ])

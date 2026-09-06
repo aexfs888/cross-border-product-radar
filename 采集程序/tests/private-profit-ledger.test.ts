@@ -12,7 +12,7 @@ const model = {
 
 function aggregate(overrides: Record<string, string> = {}) {
   return {
-    date: '2026-09-06', product_key: 'product_7f3a', country: 'GB', currency: 'GBP', orders_count: '12', net_revenue: '1200',
+    date: '2026-09-06', product_key: 'product_7f3a', country: 'GB', currency: 'GBP', orders_count: '12', revenue_before_refunds_chargebacks: '1200',
     refunds_count: '1', refund_amount: '100', chargebacks_count: '0', chargeback_amount: '0', ad_spend: '300', attributed_purchases: '10', ...overrides,
   }
 }
