@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error This Node-only local contract intentionally has no TypeScript declaration file.
-import { privateAggregateContract, validatePrivateAggregateHeaders, validatePrivateAggregateRows } from '../../自动化/private-input-contract.mjs'
+import { privateAggregateContract, unitEconomicsContract, validatePrivateAggregateHeaders, validatePrivateAggregateRows, validateUnitEconomicsRows } from '../../自动化/private-input-contract.mjs'
 
 test('私密聚合合同只接受11国、匿名商品键和聚合指标', () => {
   const headers = privateAggregateContract.requiredColumns
@@ -26,4 +26,29 @@ test('私密聚合合同拒绝PII列、未配置国家和负金额', () => {
   assert.equal(rowResult.ok, false)
   assert.ok(rowResult.errors.includes('row_2:country:outside_configured_scope'))
   assert.ok(rowResult.errors.includes('row_2:net_revenue:invalid_nonnegative_number'))
+})
+
+
+test('单位经济合同要求完整成本、状态和小数费率', () => {
+  const headers = unitEconomicsContract.requiredColumns
+  const result = validateUnitEconomicsRows(headers, [{
+    product_key: 'product_7f3a', country: 'GB', currency: 'GBP', effective_from: '2026-09-06',
+    listed_price: '49', landed_product_cost: '10', packaging_cost: '1', warehouse_cost: '2', outbound_shipping_cost: '4', duties_tax_cost: '2',
+    payment_fee_rate: '0.035', refund_rate: '0.08', chargeback_rate: '0.01', refund_loss_per_order: '3', support_cost: '1', other_variable_cost: '1',
+    inventory_units: '100', replenishment_days: '21', rights_status: 'VERIFIED', responsible_party_status: 'VERIFIED', fulfillment_status: 'VERIFIED',
+  }])
+  assert.deepEqual(result, { ok: true, errors: [], acceptedRows: 1 })
+})
+
+test('单位经济合同拒绝百分数口径、未验证状态和PII字段', () => {
+  const headers = [...unitEconomicsContract.requiredColumns, 'supplier_email']
+  assert.equal(validateUnitEconomicsRows(headers, []).ok, false)
+  const result = validateUnitEconomicsRows(unitEconomicsContract.requiredColumns, [{
+    product_key: 'product_7f3a', country: 'GB', currency: 'GBP', effective_from: '2026-09-06',
+    listed_price: '49', landed_product_cost: '10', packaging_cost: '1', warehouse_cost: '2', outbound_shipping_cost: '4', duties_tax_cost: '2',
+    payment_fee_rate: '3.5', refund_rate: '0.08', chargeback_rate: '0.01', refund_loss_per_order: '3', support_cost: '1', other_variable_cost: '1',
+    inventory_units: '100', replenishment_days: '21', rights_status: 'PENDING', responsible_party_status: 'BLOCKED', fulfillment_status: 'VERIFIED',
+  }])
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.includes('row_2:payment_fee_rate:must_be_decimal_between_0_and_1'))
 })

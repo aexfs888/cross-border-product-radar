@@ -39,6 +39,15 @@ npm run automation:shadow-status
 
 `templates/private-aggregate-contract.md` 定义后续仅本机、去标识化聚合输入的最小字段和禁止字段。`npm run automation:validate-private-aggregate` 默认失败关闭，不读取任何文件；它不是导入器，也不能绕过隐私闸门。
 
+## 本机私密聚合与利润账本（需逐次明确批准）
+
+私密数据流程不会自动启动、不调用真实 Meta/Shopify 账户，也不会创建广告、预算、目录或账户变更。
+
+- `npm run automation:validate-private-aggregate <CSV>`：默认拒绝读取；当前进程显式设置 `RADAR_PRIVATE_IMPORT_APPROVED=1` 后，只验证 `系统数据/private/` 内的聚合 CSV，不导入；
+- `npm run automation:generate-private-ledger <聚合CSV> <单位经济CSV>`：默认拒绝执行；当前进程显式设置 `RADAR_PRIVATE_LEDGER_APPROVED=1` 后，先运行 `E:/fb+bm` 的 `privacy:check`，再生成本机私密利润账本；
+- 输入合同与空表头模板见 `templates/private-aggregate-contract.md`。模板和账本均在 Git 忽略的私密目录；
+- 账本结果只输出 `REJECT`、`EVIDENCE_REQUIRED`、`TEST_READY`、`STOP` 或 `SCALE_CANDIDATE`。`SCALE_CANDIDATE` 仅表示满足最小聚合样本和正贡献利润条件，绝不自动扩量。
+
 ## 任务计划脚本
 
 `install-shadow-tasks.ps1` 创建当前 Windows 用户的交互式 30 分钟影子健康检查任务；`-Remove` 删除任务。它不提升权限，也不创建真实采集任务。
