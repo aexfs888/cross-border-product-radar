@@ -25,7 +25,7 @@ npm run automation:shadow
 npm run automation:public
 ```
 
-该模式只执行 12 个已配置、HTTPS、白名单和请求预算受控的公开来源；写入现有本机公开研究库。单轮最多 13 分钟，低频商品页、Common Crawl 和 Safety Gate 成功后至少间隔 24 小时。它不读取 `系统数据/private/`、订单、成本、客户、Meta/Shopify 账户、Cookie 或 Token。私密 `active` 模式仍被显式阻止，且不因 BitLocker 未启用而放宽。
+该模式只执行 12 个已配置、HTTPS、白名单和请求预算受控的公开来源；写入现有本机公开研究库。单轮最多 13 分钟，低频商品页、Common Crawl 和 Safety Gate 成功后至少间隔 24 小时。它不读取 `系统数据/private/`、订单、成本、客户、Meta/Shopify 账户、Cookie 或 Token。私密 `active` 模式目前仍被显式阻止，须另行实施聚合数据合同、人工批准与本机路径/权限/Git 排除/MCP 隔离验收；单机私密存储不以 BitLocker 为前置条件。
 
 ## 48 小时影子观察
 
@@ -45,9 +45,11 @@ npm run automation:shadow-status
 
 当前自动注册曾被系统以 `Access is denied` 拒绝，因此必须由拥有任务计划权限的本机用户在 PowerShell 中执行。不要为了安装该任务扩大目录权限或以 SYSTEM 身份运行。
 
-## 启用真实采集前的硬条件
+## 启用私密聚合阶段前的硬条件
 
-1. `E:/fb+bm` 的 `npm run privacy:verify-admin` 通过；
-2. 私密经营数据只位于本机私密目录且已脱敏/聚合；
+1. `E:/fb+bm` 的 `npm run privacy:check` 通过本机路径、私密目录重定向、NTFS 权限、Git 排除和模型/MCP 隔离检查；
+2. 私密经营数据只位于本机私密目录，输入符合去标识化聚合合同；
 3. 完成至少 48 小时影子观察；
 4. 增加真实采集的回归测试、恢复点和单独审批。
+
+`npm run privacy:verify-admin` 仅保留为 BitLocker 状态的可选只读诊断，不是单机私密存储的前置条件。
