@@ -26,7 +26,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 采集程序/tests/*.test.ts",
     "test:powershell": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File 采集程序/tests/sync-github-runs.test.ps1",
-    "check": "npm run typecheck && npm test && npm run test:powershell && npm run doctor"
+    "check": "npm run typecheck && npm test && npm run test:powershell && npm run doctor",
+    "automation:shadow": "node 自动化/cross-border-coordinator.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
