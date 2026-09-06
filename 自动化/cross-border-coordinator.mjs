@@ -73,6 +73,24 @@ async function shadowPreflight() {
 
 async function main() {
   await fs.mkdir(stateDirectory, { recursive: true })
+  if (mode === 'active') {
+    const result = {
+      schemaVersion: 1,
+      project: 'cross-border-radar',
+      mode,
+      runId,
+      state: 'blocked_active_not_implemented',
+      startedAt: now.toISOString(),
+      privateDataAccessed: false,
+      networkCollectionStarted: false,
+      note: '主动模式尚未启用，防止在隐私闸门未通过时采集或处理私密经营数据。',
+    }
+    await appendHistory(result)
+    console.log(JSON.stringify(result))
+    process.exitCode = 2
+    return
+  }
+
   const previous = await readJson(stateFile, null)
   const lock = await acquireLock()
   if ('existing' in lock) {
