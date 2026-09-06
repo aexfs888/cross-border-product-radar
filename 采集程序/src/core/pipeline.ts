@@ -34,7 +34,7 @@ export async function analyzeAll(store: RadarStore, options: { resetPeakForSourc
 }
 
 export async function collectLocal(options: { sourceId?: string, approvedUrl?: string, countryCode?: string } = {}): Promise<Record<string, unknown>> {
-  const store = new RadarStore(); const runId = store.beginRun('LOCAL', options); const events: CollectorEvent[] = []; const errors: Record<string, string>[] = []
+  const store = new RadarStore(); store.recoverStaleRuns(20); const runId = store.beginRun('LOCAL', options); const events: CollectorEvent[] = []; const errors: Record<string, string>[] = []
   const startedAt = Date.now(); resetRequestBudget()
   try {
     if (options.approvedUrl) events.push(...await collectApprovedProductPage(runId, options.approvedUrl, options.countryCode))

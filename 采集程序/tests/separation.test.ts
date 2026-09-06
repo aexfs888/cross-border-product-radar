@@ -372,3 +372,16 @@ test('低频公开商品页在成功后必须等待配置的最小间隔', () =>
   assert.equal(store.sourceIsDue(sourceId, 0), true)
   store.close()
 })
+
+
+test('下次本机采集会把超时的 RUNNING 记录标记为 ABANDONED，不阻塞新运行', () => {
+  const store = new RadarStore({ memory: true })
+  const staleId = store.beginRun('LOCAL')
+  store.db.prepare('UPDATE runs SET started_at=? WHERE id=?').run('2026-01-01T00:00:00.000Z', staleId)
+  assert.equal(store.recoverStaleRuns(20, Date.parse('2026-01-01T01:00:00.000Z')), 1)
+  const row = store.db.prepare('SELECT status,completed_at,error_count FROM runs WHERE id=?').get(staleId) as { status: string, completed_at: string | null, error_count: number }
+  assert.equal(row.status, 'ABANDONED')
+  assert.ok(row.completed_at)
+  assert.equal(row.error_count, 1)
+  store.close()
+})

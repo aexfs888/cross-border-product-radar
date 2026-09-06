@@ -158,6 +158,18 @@ export class RadarStore {
       .run(errors ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED', nowIso(), eventCount, errors, JSON.stringify(meta), id)
   }
 
+  recoverStaleRuns(maxAgeMinutes = 20, now = Date.now()): number {
+    const cutoff = new Date(now - Math.max(1, maxAgeMinutes) * 60_000).toISOString()
+    const result = this.db.prepare(`UPDATE runs
+      SET status='ABANDONED', completed_at=?, error_count=CASE WHEN error_count > 0 THEN error_count ELSE 1 END
+      WHERE status='RUNNING' AND started_at < ?`).run(nowIso(), cutoff)
+    const recovered = Number(result.changes || 0)
+    if (recovered > 0) {
+      this.audit('STALE_RUNS_RECOVERED', `已标记${recovered}条超时运行记录为 ABANDONED`, { recovered, maxAgeMinutes })
+    }
+    return recovered
+  }
+
   updateSourceHealth(sourceId: string, success: boolean, recordCount: number, error?: string): void {
     const existing = this.db.prepare('SELECT * FROM source_health WHERE source_id=?').get(sourceId) as {
       consecutive_failures?: number
