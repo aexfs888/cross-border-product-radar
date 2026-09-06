@@ -19,6 +19,18 @@
 npm run automation:shadow
 ```
 
+## 48 小时影子观察
+
+```text
+npm run automation:shadow-status
+```
+
+该命令只读取本机状态与历史，输出影子观察时长、合格运行次数、异常状态数和当前安全标志。通过 48 小时及 96 次合格运行不等于可以启用主动模式；隐私验证、回归测试、恢复点和单独审批仍缺一不可。
+
+## 私密聚合阶段合同（未启用）
+
+`templates/private-aggregate-contract.md` 定义后续仅本机、去标识化聚合输入的最小字段和禁止字段。`npm run automation:validate-private-aggregate` 默认失败关闭，不读取任何文件；它不是导入器，也不能绕过隐私闸门。
+
 ## 任务计划脚本
 
 `install-shadow-tasks.ps1` 创建当前 Windows 用户的交互式 30 分钟影子健康检查任务；`-Remove` 删除任务。它不提升权限，也不创建真实采集任务。

@@ -12,6 +12,7 @@ node_modules/
 系统数据/cloud-inbox/
 系统数据/cloud-state/
 系统数据/档案历史/
+系统数据/private/
 临时文件/*
 !临时文件/.gitkeep
 运行日志/*
