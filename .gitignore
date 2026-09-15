@@ -1,0 +1,9 @@
+*
+!.gitignore
+!index.json
+!source-health.json
+!packages/
+!packages/*/
+!packages/*/*.age
+!packages/*/*.manifest.json
+!packages/*/*.manifest.json.sig
