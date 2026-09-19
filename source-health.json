@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-19T20:45:28.252Z",
+  "sources": {
+    "google-trends-rss": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:41:12.509Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 0
+    },
+    "google-news-product-watchlist": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:10.858Z",
+      "lastFailureAt": "2026-09-18T05:14:31.820Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "gdelt-product-news": {
+      "consecutiveFailures": 33,
+      "lastSuccessAt": null,
+      "lastFailureAt": "2026-09-19T11:39:31.273Z",
+      "pausedUntil": "2026-09-19T23:39:31.273Z",
+      "lastError": "HTTP 429：[URL]",
+      "recordsLastRun": 0
+    },
+    "approved-product-jsonld": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T11:39:35.284Z",
+      "lastFailureAt": "2026-09-02T06:57:28.156Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "us-cpsc-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:16.136Z",
+      "lastFailureAt": "2026-09-16T15:15:23.006Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 157
+    },
+    "uk-opss-alerts": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:16.224Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 50
+    },
+    "canada-consumer-product-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:16.459Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "australia-accc-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:17.711Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 25
+    },
+    "new-zealand-product-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:27.644Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 74
+    },
+    "ecb-reference-rates": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T20:45:28.252Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 1
+    },
+    "eu-safety-gate-weekly": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-09-19T11:40:33.325Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 264
+    },
+    "common-crawl-approved-pages": {
+      "consecutiveFailures": 1,
+      "lastSuccessAt": "2026-09-18T20:04:19.874Z",
+      "lastFailureAt": "2026-09-19T20:45:15.489Z",
+      "pausedUntil": null,
+      "lastError": "网络请求失败（UND_ERR_SOCKET）",
+      "recordsLastRun": 0
+    }
+  }
+}
