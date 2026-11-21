@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-21T11:54:54.611Z",
+  "sources": {
+    "google-trends-rss": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:48:37.568Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 0
+    },
+    "google-news-product-watchlist": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:52:37.907Z",
+      "lastFailureAt": "2026-11-17T04:01:04.184Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "gdelt-product-news": {
+      "consecutiveFailures": 100,
+      "lastSuccessAt": null,
+      "lastFailureAt": "2026-11-21T11:53:13.223Z",
+      "pausedUntil": "2026-11-21T23:53:13.223Z",
+      "lastError": "HTTP 429：[URL]",
+      "recordsLastRun": 0
+    },
+    "approved-product-jsonld": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:53:16.339Z",
+      "lastFailureAt": "2026-09-02T06:57:28.156Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "us-cpsc-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:53:52.013Z",
+      "lastFailureAt": "2026-11-20T16:17:35.102Z",
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 132
+    },
+    "uk-opss-alerts": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:53:52.056Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 50
+    },
+    "canada-consumer-product-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:53:52.119Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 3
+    },
+    "australia-accc-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:53:52.269Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 25
+    },
+    "new-zealand-product-recalls": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:54:04.680Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 41
+    },
+    "ecb-reference-rates": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:54:54.611Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 1
+    },
+    "eu-safety-gate-weekly": {
+      "consecutiveFailures": 0,
+      "lastSuccessAt": "2026-11-21T11:54:54.037Z",
+      "lastFailureAt": null,
+      "pausedUntil": null,
+      "lastError": null,
+      "recordsLastRun": 393
+    },
+    "common-crawl-approved-pages": {
+      "consecutiveFailures": 3,
+      "lastSuccessAt": "2026-11-19T19:16:59.173Z",
+      "lastFailureAt": "2026-11-21T11:53:51.721Z",
+      "pausedUntil": "2026-11-21T23:53:51.721Z",
+      "lastError": "Common Crawl 索引查询失败：HTTP 504",
+      "recordsLastRun": 0
+    }
+  }
+}
